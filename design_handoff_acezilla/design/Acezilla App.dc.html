@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="light"]{--bg:#F6F5F2;--surface:#FFFFFF;--surface2:#EFEDE8;--ink:#17161B;--ink2:#55535D;--ink3:#86838F;--line:rgba(23,22,27,.09);--line2:rgba(23,22,27,.16);--accent:#7C5CFF;--accent-soft:#EEEAFF;--accent-ink:#5A3BEB;--pos:oklch(0.55 0.13 155);--neg:oklch(0.56 0.17 25);--warn:oklch(0.62 0.14 70);--tt:oklch(0.64 0.12 190);--me:oklch(0.58 0.15 262);--go:oklch(0.70 0.14 70)}
+[data-theme="dark"]{--bg:#111015;--surface:#18171D;--surface2:#222128;--ink:#F2F1F4;--ink2:#B6B3BE;--ink3:#827F8B;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.16);--accent:#8C70FF;--accent-soft:rgba(124,92,255,.17);--accent-ink:#B7A6FF;--pos:oklch(0.74 0.13 155);--neg:oklch(0.72 0.15 25);--warn:oklch(0.80 0.13 75)}
+*{box-sizing:border-box}
+body{margin:0;background:#F6F5F2}
+a{color:var(--accent-ink);text-decoration:none}a:hover{text-decoration:underline}
+input[type=range]{accent-color:#7C5CFF;width:100%}
+button{font-family:inherit}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;">
+
+<aside style="position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:18px;padding:20px 14px;border-right:1px solid var(--line);background:var(--bg);">
+  <div style="display:flex;align-items:center;gap:10px;padding:2px 8px;">
+    <div style="width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;">a</div>
+    <span style="font-weight:700;font-size:19px;letter-spacing:-0.035em;">acezilla</span>
+  </div>
+  <button onClick="{{ cycleClient }}" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;text-align:left;">
+    <div style="width:28px;height:28px;border-radius:7px;background:var(--surface2);display:grid;place-items:center;font-weight:600;font-size:12px;">{{ client.initials }}</div>
+    <div style="display:flex;flex-direction:column;min-width:0;flex:1;">
+      <span style="font-weight:600;font-size:13px;">{{ client.name }}</span>
+      <span style="font-size:11px;color:var(--ink3);">{{ client.meta }}</span>
+    </div>
+    <span style="color:var(--ink3);font-size:11px;">⇅</span>
+  </button>
+  <nav style="display:flex;flex-direction:column;gap:16px;flex:1;">
+    <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:0 10px 6px;">{{ g.label }}</span>
+        <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="2">
+          <button onClick="{{ it.go }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:none;background:{{ it.bg }};color:{{ it.color }};font-weight:{{ it.weight }};font-size:13.5px;cursor:pointer;text-align:left;box-shadow:{{ it.shadow }};">
+            <span style="width:6px;height:6px;border-radius:2px;background:{{ it.dot }};"></span>{{ it.label }}<span style="margin-left:auto;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--accent-ink);">{{ it.badge }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-for>
+  </nav>
+  <div style="display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:10px;background:var(--surface2);">
+    <div style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--tt);"></span>
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--me);"></span>
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--go);"></span>
+      <span style="margin-left:4px;">{{ syncLabel }}</span>
+    </div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:12px;cursor:pointer;">
+      <span>Theme</span><span style="font-family:'JetBrains Mono',monospace;color:var(--ink3);">{{ themeLabel }}</span>
+    </button>
+  </div>
+</aside>
+
+<main style="min-width:0;display:flex;flex-direction:column;">
+  <header style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 36px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;">
+    <button onClick="{{ goCopilot }}" style="flex:1 1 160px;min-width:160px;max-width:460px;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink3);font-size:13px;cursor:pointer;text-align:left;">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Ask copilot or search…</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;padding:2px 6px;border-radius:5px;background:var(--surface2);">⌘K</span>
+    </button>
+    <span style="margin-left:auto;padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;white-space:nowrap;">Sep 18 – Oct 17</span>
+    <button onClick="{{ goAttribution }}" style="padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;cursor:pointer;white-space:nowrap;">Model: {{ attrModel }}</button>
+    <span style="padding:7px 11px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);font-size:12.5px;font-weight:600;white-space:nowrap;">Suggest-only</span>
+    <div style="flex:none;width:32px;height:32px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-size:12px;font-weight:600;">DK</div>
+  </header>
+
+  <div style="padding:30px 36px 60px;max-width:1360px;width:100%;display:flex;flex-direction:column;gap:24px;">
+
+<!-- ONBOARDING -->
+<sc-if value="{{ is.onboarding }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Setup · Step 2 of 4</span>
+    <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;">Connect where you spend.</h1>
+    <p style="margin:0;color:var(--ink2);max-width:620px;font-size:15px;text-wrap:pretty;">acezilla reads your ad accounts and store data to build one source of truth. Access is read-only until you approve a change.</p>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <sc-for list="{{ obSteps }}" as="s" hint-placeholder-count="4">
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+        <div style="height:3px;border-radius:2px;background:{{ s.bar }};"></div>
+        <span style="font-size:12px;color:{{ s.color }};font-weight:500;">{{ s.label }}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <sc-for list="{{ connectors }}" as="c" hint-placeholder-count="5">
+        <div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+          <div style="width:40px;height:40px;border-radius:10px;background:{{ c.color }};color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px;">{{ c.short }}</div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <span style="font-weight:600;font-size:15px;">{{ c.name }}</span>
+            <span style="font-size:12.5px;color:var(--ink2);">{{ c.desc }}</span>
+          </div>
+          <span style="font-size:12px;color:var(--ink3);">{{ c.detail }}</span>
+          <button onClick="{{ c.toggle }}" style="padding:8px 14px;border-radius:9px;border:1px solid {{ c.btnBorder }};background:{{ c.btnBg }};color:{{ c.btnColor }};font-weight:600;font-size:13px;cursor:pointer;min-width:118px;">{{ c.btn }}</button>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;padding:22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">{{ connectedCount }} of 5 connected</span>
+      <h3 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;">What we'll import</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--ink2);">
+        <div style="display:flex;gap:10px;"><span style="color:var(--accent-ink);">→</span>24 months of campaign, ad set and ad history</div>
+        <div style="display:flex;gap:10px;"><span style="color:var(--accent-ink);">→</span>Creative assets with frame-level video metrics</div>
+        <div style="display:flex;gap:10px;"><span style="color:var(--accent-ink);">→</span>Orders, refunds and customer LTV from your store</div>
+        <div style="display:flex;gap:10px;"><span style="color:var(--accent-ink);">→</span>Server-side events to reconcile pixel loss</div>
+      </div>
+      <div style="padding:14px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);font-size:13px;line-height:1.5;text-wrap:pretty;"><b>Suggest-only by design.</b> Copilot and rules create drafts. Nothing reaches a live campaign until a person with permission approves it.</div>
+      <button onClick="{{ goDashboard }}" style="padding:11px;border-radius:10px;border:none;background:var(--ink);color:var(--bg);font-weight:600;font-size:14px;cursor:pointer;">Continue to goals →</button>
+    </div>
+  </div>
+</sc-if>
+
+<!-- DASHBOARD -->
+<sc-if value="{{ is.dashboard }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:300px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Saturday, October 17</span>
+      <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;text-wrap:balance;">Good morning, Dana. Revenue is up 14.6%, and three changes could add another $31k this week.</h1>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;">
+    <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="5">
+      <div style="display:flex;flex-direction:column;gap:6px;padding:18px 18px 14px;background:var(--surface);">
+        <span style="font-size:12px;color:var(--ink2);">{{ k.label }}</span>
+        <span style="font-size:26px;font-weight:600;letter-spacing:-0.03em;font-variant-numeric:tabular-nums;">{{ k.value }}</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:12px;font-weight:600;color:{{ k.deltaColor }};font-family:'JetBrains Mono',monospace;">{{ k.delta }}</span>
+          <svg width="90" height="26" viewBox="0 0 120 32" preserveAspectRatio="none"><path d="{{ k.path }}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"></path></svg>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-ink);">01</span>
+        <h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;white-space:nowrap;">Copilot briefing</h2>
+        <span style="font-size:12px;color:var(--ink3);">Ranked by estimated weekly impact</span>
+      </div>
+      <sc-for list="{{ briefing }}" as="b" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:18px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--line);opacity:{{ b.opacity }};">
+          <div style="display:flex;gap:14px;align-items:flex-start;">
+            <span style="font-size:22px;font-weight:600;letter-spacing:-0.03em;color:var(--pos);font-variant-numeric:tabular-nums;min-width:86px;">{{ b.impact }}</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">
+              <span style="font-weight:600;font-size:15px;text-wrap:pretty;">{{ b.title }}</span>
+              <span style="font-size:13px;color:var(--ink2);text-wrap:pretty;">{{ b.why }}</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding-left:100px;flex-wrap:wrap;">
+            <span style="font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--ink3);">{{ b.conf }}</span>
+            <div style="flex:1;"></div>
+            <sc-if value="{{ b.isOpen }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ b.dismiss }}" style="padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12.5px;cursor:pointer;">Dismiss</button>
+              <button onClick="{{ b.review }}" style="padding:7px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;">Create draft</button>
+            </sc-if>
+            <sc-if value="{{ b.isDraft }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:12.5px;color:var(--accent-ink);font-weight:600;">Draft created · waiting in Approvals</span>
+            </sc-if>
+            <sc-if value="{{ b.isDismissed }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:12.5px;color:var(--ink3);">Dismissed · copilot will learn from this</span>
+            </sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:baseline;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-ink);">02</span>
+        <h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;">Monthly pacing</h2>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px;padding:20px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+        <sc-for list="{{ pacing }}" as="p" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:2px;background:{{ p.color }};"></span>
+              <span style="font-weight:600;">{{ p.name }}</span>
+              <span style="font-size:12px;color:var(--ink3);">ROAS {{ p.roas }}</span>
+              <span style="margin-left:auto;font-variant-numeric:tabular-nums;font-size:13px;">{{ p.spent }} <span style="color:var(--ink3);">/ {{ p.budget }}</span></span>
+            </div>
+            <div style="position:relative;height:8px;border-radius:4px;background:var(--surface2);">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:{{ p.pct }};border-radius:4px;background:{{ p.color }};"></div>
+              <div style="position:absolute;left:55%;top:-4px;bottom:-4px;width:2px;background:var(--ink);"></div>
+            </div>
+            <span style="font-size:12px;color:{{ p.statusColor }};">{{ p.status }}</span>
+          </div>
+        </sc-for>
+        <span style="font-size:11.5px;color:var(--ink3);font-family:'JetBrains Mono',monospace;">| = today (day 17 of 31)</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:8px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-ink);">03</span>
+        <h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;">Anomalies</h2>
+      </div>
+      <div style="display:flex;flex-direction:column;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+        <sc-for list="{{ anomalies }}" as="a" hint-placeholder-count="3">
+          <div style="display:flex;gap:12px;padding:14px 18px;border-top:1px solid var(--line);">
+            <span style="width:8px;height:8px;margin-top:6px;border-radius:50%;background:{{ a.color }};flex:none;"></span>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span style="font-weight:600;font-size:13.5px;">{{ a.title }}</span>
+              <span style="font-size:12.5px;color:var(--ink2);">{{ a.detail }}</span>
+            </div>
+            <span style="margin-left:auto;font-size:11.5px;color:var(--ink3);white-space:nowrap;">{{ a.when }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:baseline;gap:10px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-ink);">04</span>
+      <h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;">Revenue vs spend, 30 days</h2>
+      <span style="display:flex;gap:14px;margin-left:auto;font-size:12px;color:var(--ink2);"><span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:3px;background:var(--accent);"></span>Revenue (modeled)</span><span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:3px;background:var(--ink3);"></span>Spend</span></span>
+    </div>
+    <div style="padding:20px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none" style="display:block;">
+        <path d="{{ chart.area }}" fill="var(--accent-soft)"></path>
+        <path d="{{ chart.rev }}" fill="none" stroke="var(--accent)" stroke-width="2.5" vector-effect="non-scaling-stroke"></path>
+        <path d="{{ chart.spend }}" fill="none" stroke="var(--ink3)" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></path>
+      </svg>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--ink3);font-family:'JetBrains Mono',monospace;"><span>Sep 18</span><span>Sep 25</span><span>Oct 2</span><span>Oct 9</span><span>Oct 17</span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:baseline;gap:10px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-ink);">05</span>
+      <h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;">Campaigns</h2>
+      <span style="font-size:12px;color:var(--ink3);">Platform-reported next to modeled ROAS</span>
+    </div>
+    <div style="border-radius:14px;background:var(--surface);border:1px solid var(--line);overflow:hidden;">
+      <div style="display:grid;grid-template-columns:minmax(0,2.4fr) repeat(5,minmax(0,1fr));gap:12px;padding:11px 20px;font-size:11.5px;color:var(--ink3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.05em;">
+        <span>Campaign</span><span style="text-align:right;">Spend</span><span style="text-align:right;">Platform ROAS</span><span style="text-align:right;">Modeled ROAS</span><span style="text-align:right;">CPA</span><span style="text-align:right;">Status</span>
+      </div>
+      <sc-for list="{{ campaigns }}" as="c" hint-placeholder-count="5">
+        <div style="display:grid;grid-template-columns:minmax(0,2.4fr) repeat(5,minmax(0,1fr));gap:12px;padding:13px 20px;border-top:1px solid var(--line);align-items:center;font-variant-numeric:tabular-nums;">
+          <span style="display:flex;align-items:center;gap:10px;min-width:0;"><span style="width:8px;height:8px;border-radius:2px;background:{{ c.color }};flex:none;"></span><span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.name }}</span></span>
+          <span style="text-align:right;">{{ c.spend }}</span>
+          <span style="text-align:right;color:var(--ink3);">{{ c.proas }}</span>
+          <span style="text-align:right;font-weight:600;">{{ c.mroas }}</span>
+          <span style="text-align:right;">{{ c.cpa }}</span>
+          <span style="text-align:right;font-size:12px;color:{{ c.statusColor }};font-weight:600;">{{ c.status }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+
+<!-- PLANNER -->
+<sc-if value="{{ is.planner }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Plan · Q4 2026</span>
+      <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;">Q4 media plan</h1>
+      <p style="margin:0;color:var(--ink2);font-size:15px;">Flights, budget and forecast in one place. Edit the split to see the forecast change.</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button style="padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;cursor:pointer;">Share with client</button>
+      <button onClick="{{ goBuilder }}" style="padding:9px 14px;border-radius:9px;border:none;background:var(--ink);color:var(--bg);font-weight:600;font-size:13px;cursor:pointer;">+ New flight</button>
+    </div>
+  </div>
+  <div style="border-radius:14px;background:var(--surface);border:1px solid var(--line);overflow:hidden;">
+    <div style="display:grid;grid-template-columns:220px minmax(0,1fr);border-bottom:1px solid var(--line);">
+      <span style="padding:10px 18px;font-size:11.5px;color:var(--ink3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;">Flight</span>
+      <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));">
+        <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="12">
+          <span style="padding:10px 6px;font-size:11px;color:var(--ink3);font-family:'JetBrains Mono',monospace;border-left:1px solid var(--line);">{{ w }}</span>
+        </sc-for>
+      </div>
+    </div>
+    <sc-for list="{{ flights }}" as="f" hint-placeholder-count="6">
+      <div style="display:grid;grid-template-columns:220px minmax(0,1fr);border-bottom:1px solid var(--line);">
+        <div style="padding:12px 18px;display:flex;flex-direction:column;gap:2px;">
+          <span style="font-weight:600;font-size:13.5px;">{{ f.name }}</span>
+          <span style="font-size:11.5px;color:var(--ink3);">{{ f.meta }}</span>
+        </div>
+        <div style="position:relative;background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/12 - 1px),var(--line) calc(100%/12 - 1px),var(--line) calc(100%/12));">
+          <div style="position:absolute;top:12px;bottom:12px;left:{{ f.left }};width:{{ f.width }};border-radius:7px;background:{{ f.bg }};border:1px solid {{ f.border }};display:flex;align-items:center;gap:6px;padding:0 10px;overflow:hidden;">
+            <sc-for list="{{ f.dots }}" as="d" hint-placeholder-count="1"><span style="width:7px;height:7px;border-radius:2px;background:{{ d }};flex:none;"></span></sc-for>
+            <span style="font-size:12px;font-weight:600;white-space:nowrap;color:var(--ink);">{{ f.budget }}</span>
+          </div>
+          <div style="position:absolute;top:0;bottom:0;left:{{ todayLeft }};width:2px;background:var(--accent);"></div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:18px;padding:22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <div style="display:flex;align-items:baseline;gap:10px;">
+        <h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-0.02em;">Budget allocation</h2>
+        <span style="margin-left:auto;font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums;">Total {{ plan.total }}</span>
+      </div>
+      <sc-for list="{{ plan.rows }}" as="r" hint-placeholder-count="3">
+        <div style="display:grid;grid-template-columns:110px minmax(0,1fr) 150px;gap:16px;align-items:center;">
+          <span style="display:flex;align-items:center;gap:8px;font-weight:600;"><span style="width:8px;height:8px;border-radius:2px;background:{{ r.color }};"></span>{{ r.name }}</span>
+          <input type="range" min="20" max="260" step="5" value="{{ r.value }}" onChange="{{ r.onChange }}">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;font-variant-numeric:tabular-nums;">
+            <span style="font-weight:600;">{{ r.spend }} <span style="color:var(--ink3);font-weight:400;">· {{ r.share }}</span></span>
+            <span style="font-size:12px;color:var(--ink3);">→ {{ r.rev }} · ROAS {{ r.roas }}</span>
+          </div>
+        </div>
+      </sc-for>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);font-size:13px;">
+        <span style="flex:1;text-wrap:pretty;">{{ plan.suggestText }}</span>
+        <button onClick="{{ plan.apply }}" style="padding:7px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;white-space:nowrap;">Use suggested split</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--line);">
+      <div style="padding:22px;background:var(--surface);display:flex;flex-direction:column;gap:4px;">
+        <span style="font-size:12px;color:var(--ink2);">Forecast revenue · Q4</span>
+        <span style="font-size:40px;font-weight:600;letter-spacing:-0.035em;font-variant-numeric:tabular-nums;">{{ plan.rev }}</span>
+        <span style="font-size:12.5px;color:var(--ink3);">80% interval {{ plan.range }}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;">
+        <div style="padding:18px 22px;background:var(--surface);display:flex;flex-direction:column;gap:2px;"><span style="font-size:12px;color:var(--ink2);">Blended ROAS</span><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;">{{ plan.roas }}</span></div>
+        <div style="padding:18px 22px;background:var(--surface);display:flex;flex-direction:column;gap:2px;"><span style="font-size:12px;color:var(--ink2);">vs suggested split</span><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ plan.gapColor }};">{{ plan.gap }}</span></div>
+      </div>
+      <div style="padding:16px 22px;background:var(--surface);font-size:12.5px;color:var(--ink2);line-height:1.55;text-wrap:pretty;">Forecast uses response curves fitted to 24 months of your spend, with diminishing returns per channel and BFCM seasonality from 2024–2025.</div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- BUILDER -->
+<sc-if value="{{ is.builder }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Plan · New campaign</span>
+    <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;">BFCM Sale — cross-platform</h1>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      <sc-for list="{{ bSteps }}" as="s" hint-placeholder-count="5">
+        <button onClick="{{ s.go }}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;border:none;background:{{ s.bg }};color:{{ s.color }};font-weight:{{ s.weight }};font-size:13.5px;cursor:pointer;text-align:left;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);">{{ s.num }}</span>{{ s.label }}
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;padding:24px;border-radius:14px;background:var(--surface);border:1px solid var(--line);min-height:420px;">
+      <sc-if value="{{ bIs.s0 }}" hint-placeholder-val="{{ true }}">
+        <h3 style="margin:0;font-size:18px;font-weight:600;">What should this campaign achieve?</h3>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+          <sc-for list="{{ objectives }}" as="o" hint-placeholder-count="4">
+            <button onClick="{{ o.pick }}" style="display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:12px;border:1.5px solid {{ o.border }};background:{{ o.bg }};color:var(--ink);text-align:left;cursor:pointer;">
+              <span style="font-weight:600;font-size:14.5px;">{{ o.name }}</span>
+              <span style="font-size:12.5px;color:var(--ink2);">{{ o.desc }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <h3 style="margin:8px 0 0;font-size:15px;font-weight:600;">Publish to</h3>
+        <div style="display:flex;gap:8px;">
+          <sc-for list="{{ platToggles }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.toggle }}" style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;border:1.5px solid {{ p.border }};background:{{ p.bg }};color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;"><span style="width:8px;height:8px;border-radius:2px;background:{{ p.color }};"></span>{{ p.name }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ bIs.s1 }}" hint-placeholder-val="{{ false }}">
+        <h3 style="margin:0;font-size:18px;font-weight:600;">Audience</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="padding:14px 16px;border-radius:10px;border:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;"><span><b>Seed</b> · Shopify purchasers, last 180 days</span><span style="color:var(--ink3);">24,180 people</span></div>
+          <div style="padding:14px 16px;border-radius:10px;border:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;"><span><b>Locations</b> · US, CA</span><span style="color:var(--ink3);">Ages 22–54</span></div>
+          <div style="padding:14px 16px;border-radius:10px;border:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;"><span><b>Exclude</b> · Purchased in last 14 days</span><span style="color:var(--ink3);">3,940 people</span></div>
+        </div>
+        <div style="padding:14px 16px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);font-size:13px;text-wrap:pretty;">Copilot: broad targeting with your seed as a signal beat narrow interests by 23% CPA across your last 6 sales events. Recommended.</div>
+      </sc-if>
+      <sc-if value="{{ bIs.s2 }}" hint-placeholder-val="{{ false }}">
+        <h3 style="margin:0;font-size:18px;font-weight:600;">Budget & schedule</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="padding:14px 16px;border-radius:10px;border:1px solid var(--line);display:flex;flex-direction:column;gap:2px;"><span style="font-size:12px;color:var(--ink3);">Daily budget</span><span style="font-size:22px;font-weight:600;">$3,000</span></div>
+          <div style="padding:14px 16px;border-radius:10px;border:1px solid var(--line);display:flex;flex-direction:column;gap:2px;"><span style="font-size:12px;color:var(--ink3);">Flight</span><span style="font-size:22px;font-weight:600;">Nov 23 – Dec 2</span></div>
+        </div>
+        <span style="font-size:13px;font-weight:600;">Split across platforms</span>
+        <div style="display:flex;gap:8px;">
+          <sc-for list="{{ splitModes }}" as="m" hint-placeholder-count="3">
+            <button onClick="{{ m.pick }}" style="padding:8px 14px;border-radius:999px;border:1.5px solid {{ m.border }};background:{{ m.bg }};color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;">{{ m.name }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ bIs.s3 }}" hint-placeholder-val="{{ false }}">
+        <h3 style="margin:0;font-size:18px;font-weight:600;">Creatives</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;">
+          <sc-for list="{{ builderCreatives }}" as="c" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="aspect-ratio:9/14;border-radius:10px;background:repeating-linear-gradient(135deg,var(--surface2) 0 8px,var(--bg) 8px 16px);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3);">{{ c.fmt }}</div>
+              <span style="font-size:12px;font-weight:600;">{{ c.name }}</span>
+              <span style="font-size:11px;color:{{ c.checkColor }};">{{ c.check }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ bIs.s4 }}" hint-placeholder-val="{{ false }}">
+        <h3 style="margin:0;font-size:18px;font-weight:600;">Review & submit</h3>
+        <p style="margin:0;color:var(--ink2);text-wrap:pretty;">Publishes {{ builderSummary }}. Drafts are created in each ad account as paused until approved.</p>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button onClick="{{ submitBuild }}" style="padding:11px 18px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">{{ submitLabel }}</button>
+          <span style="font-size:12.5px;color:var(--ink3);">Approver: Northwind Outdoor (client)</span>
+        </div>
+      </sc-if>
+      <div style="flex:1;"></div>
+      <div style="display:flex;justify-content:space-between;">
+        <button onClick="{{ bPrev }}" style="padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--ink2);font-size:13px;cursor:pointer;">← Back</button>
+        <button onClick="{{ bNext }}" style="padding:9px 14px;border-radius:9px;border:none;background:var(--ink);color:var(--bg);font-weight:600;font-size:13px;cursor:pointer;">Next →</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <h3 style="margin:0;font-size:15px;font-weight:600;">Platform translation</h3>
+        <span style="font-size:12px;color:var(--ink3);">One brief, three native setups</span>
+      </div>
+      <sc-for list="{{ translation }}" as="t" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:2px;background:{{ t.color }};"></span><span style="font-weight:600;">{{ t.name }}</span><span style="margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;">{{ t.budget }}<span style="color:var(--ink3);font-weight:400;">/day</span></span></div>
+          <div style="display:grid;grid-template-columns:76px minmax(0,1fr);gap:4px 10px;font-size:12.5px;">
+            <span style="color:var(--ink3);">Objective</span><span>{{ t.obj }}</span>
+            <span style="color:var(--ink3);">Audience</span><span>{{ t.aud }}</span>
+          </div>
+          <span style="font-size:12px;color:{{ t.checkColor }};">{{ t.check }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+
+<!-- CREATIVE -->
+<sc-if value="{{ is.creative }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Analyze · Creative</span>
+      <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;">Which creatives are working, and why</h1>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <sc-for list="{{ cFilters }}" as="f" hint-placeholder-count="4">
+        <button onClick="{{ f.pick }}" style="padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:{{ f.bg }};color:{{ f.color }};font-size:12.5px;font-weight:600;cursor:pointer;">{{ f.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,360px);gap:24px;align-items:start;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;">
+      <sc-for list="{{ creatives }}" as="c" hint-placeholder-count="8">
+        <button onClick="{{ c.select }}" style="display:flex;flex-direction:column;gap:0;padding:0;border-radius:14px;border:1.5px solid {{ c.border }};background:var(--surface);color:var(--ink);text-align:left;cursor:pointer;overflow:hidden;">
+          <div style="position:relative;aspect-ratio:4/5;background:repeating-linear-gradient(135deg,var(--surface2) 0 8px,var(--bg) 8px 16px);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink3);">
+            {{ c.fmt }}
+            <span style="position:absolute;top:10px;left:10px;width:10px;height:10px;border-radius:3px;background:{{ c.color }};"></span>
+            <span style="position:absolute;top:8px;right:8px;padding:3px 8px;border-radius:999px;background:var(--surface);font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;font-weight:600;color:{{ c.fatColor }};">{{ c.fatigue }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;">
+            <span style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.name }}</span>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-variant-numeric:tabular-nums;">
+              <div style="display:flex;flex-direction:column;"><span style="font-size:10.5px;color:var(--ink3);">Hook</span><span style="font-weight:600;font-size:13px;">{{ c.hook }}</span></div>
+              <div style="display:flex;flex-direction:column;"><span style="font-size:10.5px;color:var(--ink3);">Hold</span><span style="font-weight:600;font-size:13px;">{{ c.hold }}</span></div>
+              <div style="display:flex;flex-direction:column;"><span style="font-size:10.5px;color:var(--ink3);">ROAS</span><span style="font-weight:600;font-size:13px;">{{ c.roas }}</span></div>
+            </div>
+          </div>
+        </button>
+      </sc-for>
+    </div>
+    <div style="position:sticky;top:90px;display:flex;flex-direction:column;gap:16px;padding:22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:2px;background:{{ sel.color }};"></span><span style="font-size:12px;color:var(--ink3);">{{ sel.pname }} · {{ sel.fmt }} · {{ sel.spend }} spent</span></div>
+      <h3 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-0.02em;">{{ sel.name }}</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <span style="font-size:12px;color:var(--ink2);">Viewer retention by second</span>
+        <svg width="100%" height="110" viewBox="0 0 300 110" preserveAspectRatio="none" style="display:block;background:var(--surface2);border-radius:8px;">
+          <path d="{{ sel.area }}" fill="var(--accent-soft)"></path>
+          <path d="{{ sel.curve }}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:10.5px;font-family:'JetBrains Mono',monospace;color:var(--ink3);"><span>0s</span><span>3s</span><span>7s</span><span>15s</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-variant-numeric:tabular-nums;">
+        <div style="display:flex;flex-direction:column;"><span style="font-size:11px;color:var(--ink3);">Hook</span><span style="font-weight:600;font-size:16px;">{{ sel.hook }}</span></div>
+        <div style="display:flex;flex-direction:column;"><span style="font-size:11px;color:var(--ink3);">Hold</span><span style="font-weight:600;font-size:16px;">{{ sel.hold }}</span></div>
+        <div style="display:flex;flex-direction:column;"><span style="font-size:11px;color:var(--ink3);">CTR</span><span style="font-weight:600;font-size:16px;">{{ sel.ctr }}</span></div>
+        <div style="display:flex;flex-direction:column;"><span style="font-size:11px;color:var(--ink3);">ROAS</span><span style="font-weight:600;font-size:16px;">{{ sel.roas }}</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);font-size:13px;line-height:1.5;">
+        <span style="font-weight:600;">Copilot read</span>
+        <span style="text-wrap:pretty;">{{ sel.note }}</span>
+      </div>
+      <button onClick="{{ goCopilot }}" style="padding:10px;border-radius:10px;border:1px solid var(--line2);background:transparent;color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;">Draft 3 variants from this hook</button>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ATTRIBUTION -->
+<sc-if value="{{ is.attribution }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:320px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Analyze · Attribution</span>
+      <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;text-wrap:balance;">Platforms claim 22,270 sales. Your store recorded 19,300.</h1>
+      <p style="margin:0;color:var(--ink2);font-size:15px;">acezilla removes the overlap and credits each channel once, using the model you choose.</p>
+    </div>
+    <div style="display:flex;padding:3px;border-radius:10px;background:var(--surface2);">
+      <sc-for list="{{ models }}" as="m" hint-placeholder-count="4">
+        <button onClick="{{ m.pick }}" style="padding:7px 13px;border-radius:8px;border:none;background:{{ m.bg }};color:{{ m.color }};font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:{{ m.shadow }};">{{ m.name }}</button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="border-radius:14px;background:var(--surface);border:1px solid var(--line);overflow:hidden;">
+    <div style="display:grid;grid-template-columns:140px minmax(0,2fr) repeat(3,minmax(0,1fr));gap:16px;padding:11px 20px;font-size:11.5px;color:var(--ink3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.05em;">
+      <span>Channel</span><span>Conversions · platform vs {{ attrModel }}</span><span style="text-align:right;">Credited</span><span style="text-align:right;">vs platform</span><span style="text-align:right;">ROAS</span>
+    </div>
+    <sc-for list="{{ attrRows }}" as="r" hint-placeholder-count="3">
+      <div style="display:grid;grid-template-columns:140px minmax(0,2fr) repeat(3,minmax(0,1fr));gap:16px;padding:16px 20px;border-top:1px solid var(--line);align-items:center;font-variant-numeric:tabular-nums;">
+        <span style="display:flex;align-items:center;gap:8px;font-weight:600;"><span style="width:8px;height:8px;border-radius:2px;background:{{ r.color }};"></span>{{ r.name }}</span>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div style="height:6px;border-radius:3px;background:var(--line2);width:{{ r.pw }};"></div>
+          <div style="height:10px;border-radius:3px;background:{{ r.color }};width:{{ r.mw }};"></div>
+        </div>
+        <span style="text-align:right;font-weight:600;font-size:15px;">{{ r.conv }}</span>
+        <span style="text-align:right;color:{{ r.deltaColor }};font-weight:600;">{{ r.delta }}</span>
+        <span style="text-align:right;font-weight:600;font-size:15px;">{{ r.roas }}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:14px;padding:22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <h3 style="margin:0;font-size:16px;font-weight:600;">Funnel</h3>
+      <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>{{ f.label }}</span><span style="font-variant-numeric:tabular-nums;"><b>{{ f.value }}</b> <span style="color:var(--ink3);">{{ f.rate }}</span></span></div>
+          <div style="height:8px;border-radius:4px;background:var(--accent);opacity:{{ f.op }};width:{{ f.w }};"></div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;padding:22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <h3 style="margin:0;font-size:16px;font-weight:600;">Repeat purchase by cohort</h3>
+      <div style="display:grid;grid-template-columns:40px repeat(6,minmax(0,1fr));gap:3px;font-size:11px;font-variant-numeric:tabular-nums;">
+        <span></span><span style="color:var(--ink3);text-align:center;">M0</span><span style="color:var(--ink3);text-align:center;">M1</span><span style="color:var(--ink3);text-align:center;">M2</span><span style="color:var(--ink3);text-align:center;">M3</span><span style="color:var(--ink3);text-align:center;">M4</span><span style="color:var(--ink3);text-align:center;">M5</span>
+        <sc-for list="{{ cohortCells }}" as="c" hint-placeholder-count="42">
+          <span style="padding:6px 0;text-align:center;border-radius:4px;background:{{ c.bg }};color:{{ c.color }};font-weight:{{ c.weight }};">{{ c.text }}</span>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;padding:22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Incrementality test · complete</span>
+      <h3 style="margin:0;font-size:16px;font-weight:600;">Meta prospecting geo-holdout</h3>
+      <div style="display:flex;gap:24px;">
+        <div style="display:flex;flex-direction:column;"><span style="font-size:30px;font-weight:600;letter-spacing:-0.03em;color:var(--pos);">+22%</span><span style="font-size:12px;color:var(--ink3);">lift ± 6pt</span></div>
+        <div style="display:flex;flex-direction:column;"><span style="font-size:30px;font-weight:600;letter-spacing:-0.03em;">2.8×</span><span style="font-size:12px;color:var(--ink3);">incremental ROAS</span></div>
+      </div>
+      <p style="margin:0;font-size:13px;color:var(--ink2);line-height:1.55;text-wrap:pretty;">14 holdout regions over 4 weeks. Meta's reported ROAS (4.6×) overstates true impact by about 39%. The data-driven model has been recalibrated to match.</p>
+      <button style="padding:9px;border-radius:9px;border:1px solid var(--line2);background:transparent;color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;">Design next test</button>
+    </div>
+  </div>
+</sc-if>
+
+<!-- RULES -->
+<sc-if value="{{ is.rules }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Automate</span>
+      <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;">Rules & approvals</h1>
+      <p style="margin:0;color:var(--ink2);font-size:15px;">Rules watch every account around the clock. They can only suggest changes, and a person approves them.</p>
+    </div>
+    <button style="padding:9px 14px;border-radius:9px;border:none;background:var(--ink);color:var(--bg);font-weight:600;font-size:13px;cursor:pointer;">+ New rule</button>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <sc-for list="{{ rules }}" as="r" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:18px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--line);opacity:{{ r.opacity }};">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:{{ r.color }};"></span>
+            <span style="font-weight:600;font-size:15px;">{{ r.name }}</span>
+            <span style="font-size:12px;color:var(--ink3);">{{ r.scope }}</span>
+            <button onClick="{{ r.toggle }}" style="margin-left:auto;width:38px;height:22px;border-radius:999px;border:none;background:{{ r.trackBg }};position:relative;cursor:pointer;padding:0;">
+              <span style="position:absolute;top:3px;left:{{ r.knob }};width:16px;height:16px;border-radius:50%;background:#fff;"></span>
+            </button>
+          </div>
+          <div style="display:grid;grid-template-columns:46px minmax(0,1fr);gap:6px 10px;font-size:13.5px;align-items:baseline;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);">IF</span><span style="text-wrap:pretty;">{{ r.cond }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-ink);">THEN</span><span style="text-wrap:pretty;color:var(--accent-ink);font-weight:500;">{{ r.action }}</span>
+          </div>
+          <span style="font-size:12px;color:var(--ink3);">{{ r.stats }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;position:sticky;top:90px;">
+      <div style="display:flex;align-items:baseline;gap:8px;"><h3 style="margin:0;font-size:16px;font-weight:600;">Approval queue</h3><span style="font-size:12px;color:var(--ink3);">{{ pendingCount }} waiting</span></div>
+      <sc-for list="{{ approvals }}" as="a" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:14px;background:var(--surface);border:1px solid var(--line);">
+          <span style="font-weight:600;font-size:14px;text-wrap:pretty;">{{ a.title }}</span>
+          <div style="display:grid;grid-template-columns:76px minmax(0,1fr);gap:3px 10px;font-size:12.5px;">
+            <span style="color:var(--ink3);">Source</span><span>{{ a.source }}</span>
+            <span style="color:var(--ink3);">Approver</span><span>{{ a.approver }}</span>
+            <span style="color:var(--ink3);">Est. impact</span><span style="color:var(--pos);font-weight:600;">{{ a.impact }}</span>
+          </div>
+          <sc-if value="{{ a.isPending }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:8px;">
+              <button onClick="{{ a.reject }}" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12.5px;cursor:pointer;">Reject</button>
+              <button onClick="{{ a.approve }}" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;">Approve & push</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ a.isDone }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:12.5px;font-weight:600;color:{{ a.doneColor }};">{{ a.doneText }}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+
+<!-- COPILOT -->
+<sc-if value="{{ is.copilot }}" hint-placeholder-val="{{ false }}">
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:20px;max-width:780px;">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Copilot</span>
+        <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.03em;">Ask anything about your accounts.</h1>
+      </div>
+      <sc-for list="{{ messages }}" as="m" hint-placeholder-count="2">
+        <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ true }}">
+          <div style="align-self:flex-end;max-width:80%;padding:12px 16px;border-radius:14px 14px 4px 14px;background:var(--ink);color:var(--bg);font-size:14px;">{{ m.text }}</div>
+        </sc-if>
+        <sc-if value="{{ m.isBot }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:8px;background:var(--accent);flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;">a</div>
+            <div style="display:flex;flex-direction:column;gap:12px;flex:1;min-width:0;padding:16px 18px;border-radius:4px 14px 14px 14px;background:var(--surface);border:1px solid var(--line);">
+              <span style="font-size:14.5px;line-height:1.55;text-wrap:pretty;">{{ m.text }}</span>
+              <sc-for list="{{ m.drivers }}" as="d" hint-placeholder-count="0">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 120px 52px;gap:12px;align-items:center;font-size:13px;">
+                  <span style="text-wrap:pretty;color:var(--ink2);">{{ d.text }}</span>
+                  <div style="height:8px;border-radius:4px;background:var(--surface2);display:flex;justify-content:flex-end;"><div style="height:8px;border-radius:4px;background:var(--neg);width:{{ d.w }};"></div></div>
+                  <span style="text-align:right;font-weight:600;color:var(--neg);font-variant-numeric:tabular-nums;">{{ d.val }}</span>
+                </div>
+              </sc-for>
+              <span style="font-size:11.5px;color:var(--ink3);font-family:'JetBrains Mono',monospace;">{{ m.sources }}</span>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <sc-for list="{{ m.actions }}" as="ac" hint-placeholder-count="0">
+                  <button onClick="{{ goRules }}" style="padding:7px 12px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;">{{ ac }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-for>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <sc-for list="{{ prompts }}" as="p" hint-placeholder-count="3">
+          <button onClick="{{ p.send }}" style="padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);font-size:12.5px;cursor:pointer;">{{ p.text }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:8px;padding:8px;border-radius:14px;background:var(--surface);border:1px solid var(--line2);">
+        <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onKey }}" placeholder="Ask about spend, creatives, attribution, or plan a campaign…" style="flex:1;border:none;outline:none;background:transparent;color:var(--ink);font-family:inherit;font-size:14px;padding:8px 10px;">
+        <button onClick="{{ send }}" style="padding:9px 16px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:13px;cursor:pointer;">Send</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;padding:20px;border-radius:14px;background:var(--surface);border:1px solid var(--line);position:sticky;top:90px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Grounded in</span>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink2);">Accounts</span><span>TikTok, Meta, Google</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink2);">Store</span><span>Shopify · 19,300 orders</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink2);">Window</span><span>Last 90 days</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink2);">Model</span><span>{{ attrModel }}</span></div>
+      </div>
+      <div style="padding:12px;border-radius:10px;background:var(--surface2);font-size:12.5px;color:var(--ink2);line-height:1.5;text-wrap:pretty;">Every answer cites its data. Actions become drafts in the approval queue and are never applied automatically.</div>
+    </div>
+  </div>
+</sc-if>
+
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;onboarding&quot;,&quot;dashboard&quot;,&quot;planner&quot;,&quot;builder&quot;,&quot;creative&quot;,&quot;attribution&quot;,&quot;rules&quot;,&quot;copilot&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const PL={tiktok:{name:'TikTok',short:'T',color:'var(--tt)'},meta:{name:'Meta',short:'M',color:'var(--me)'},google:{name:'Google',short:'G',color:'var(--go)'}};
+const k$=v=>v>=1e6?'$'+(v/1e6).toFixed(2)+'M':v>=1e3?'$'+(v/1e3).toFixed(v>=1e5?0:1)+'k':'$'+Math.round(v);
+const ser=(n,b,a,s)=>Array.from({length:n},(_,i)=>b+a*Math.sin(i*.45+s)+a*.5*Math.sin(i*1.3+s*2)+i*b*.006);
+function pth(arr,w,h,pad=4){const mn=Math.min(...arr),mx=Math.max(...arr);return arr.map((v,i)=>(i?'L':'M')+(i/(arr.length-1)*w).toFixed(1)+','+(h-pad-(v-mn)/(mx-mn||1)*(h-pad*2)).toFixed(1)).join(' ');}
+const SCREENS=['onboarding','dashboard','planner','builder','creative','attribution','rules','copilot'];
+const CLIENTS=[{name:'Northwind Outdoor',initials:'NO',meta:'E-commerce · 3 accounts'},{name:'Lumen Skincare',initials:'LS',meta:'DTC · 4 accounts'},{name:'Brightpath Health',initials:'BH',meta:'Lead gen · 2 accounts'}];
+const CREATIVES=[
+{id:1,name:'Morning routine — 15s UGC',p:'tiktok',fmt:'9:16 video',hook:22,hold:31,ctr:1.4,roas:2.1,spend:8400,fat:'Fatigued',note:'Hook rate is down 38% in 6 days at frequency 4.2. The opening shot is a slow pan with no face. Your top hooks put a person on screen in the first second.'},
+{id:2,name:'Trail test — founder POV',p:'tiktok',fmt:'9:16 video',hook:41,hold:46,ctr:2.3,roas:4.6,spend:12100,fat:'Fresh',note:'Strongest hook in the account. The founder speaks to camera within 0.8s and the "I tested this for 300 miles" claim holds viewers past 7s. Variants should keep the claim and test the setting.'},
+{id:3,name:'5 colorways carousel',p:'meta',fmt:'1:1 carousel',hook:34,hold:0,ctr:1.9,roas:3.8,spend:15200,fat:'Watch',note:'Card 3 (Moss) gets 41% of clicks. Making it the first card should lift CTR, based on similar reorders in your history.'},
+{id:4,name:'Review montage — 30s',p:'meta',fmt:'4:5 video',hook:29,hold:38,ctr:1.6,roas:3.2,spend:21800,fat:'Watch',note:'Retention drops sharply at 9s, where the montage switches to product specs. Cutting to 15s with reviews only is the obvious test.'},
+{id:5,name:'Search — "waterproof trail shoe"',p:'google',fmt:'RSA text',hook:0,hold:0,ctr:7.8,roas:5.4,spend:9600,fat:'Fresh',note:'Headlines that mention "waterproof" win 3:1 over headlines about comfort. Pin a waterproof headline to position 1.'},
+{id:6,name:'Gift guide — static',p:'meta',fmt:'1:1 image',hook:18,hold:0,ctr:0.9,roas:1.7,spend:6200,fat:'Fatigued',note:'Too early in the season. Gift-intent CTR usually doubles after Nov 15 in this account. Pause it and relaunch with a fresh visual in the BFCM flight.'},
+{id:7,name:'Unboxing — creator Spark',p:'tiktok',fmt:'9:16 video',hook:37,hold:42,ctr:2.0,roas:4.1,spend:7300,fat:'Fresh',note:'Spark Ad comments are 84% positive, and sound-on viewers convert at 1.6× the rate of others. Scale it with the creator\'s other two videos.'},
+{id:8,name:'PMax — lifestyle set',p:'google',fmt:'Asset group',hook:0,hold:0,ctr:1.2,roas:3.0,spend:11400,fat:'Watch',note:'31% of conversions in this asset group come from branded search. Excluding brand terms will show its true prospecting value.'}];
+const ATTR={'Platform':{tiktok:4120,meta:9840,google:8310},'Last click':{tiktok:2050,meta:6900,google:10350},'Data-driven':{tiktok:3480,meta:8120,google:7700},'MMM':{tiktok:3950,meta:8600,google:6750}};
+const SPEND={tiktok:41200,meta:92800,google:50320};
+const CURVE={tiktok:3.4*Math.pow(90,.28),meta:4.0*Math.pow(180,.28),google:4.2*Math.pow(150,.28)};
+const fc=(p,s)=>CURVE[p]*Math.pow(s,.72);
+const optimal=total=>{const w={},e=1/(1-.72);let sum=0;for(const p in CURVE){w[p]=Math.pow(CURVE[p],e);sum+=w[p];}const o={};for(const p in w)o[p]=Math.round(total*w[p]/sum/5)*5;return o;};
+const BOT_REPLY={text:"Here's my plan, based on the last 30 days across all three accounts. I've put it in the approval queue as a draft so you can review the exact changes before anything is applied.",drivers:[],sources:'Sources · Meta Ads API · TikTok Ads API · Google Ads API · Shopify',actions:['Review draft in Approvals']};
+
+class Component extends DCLogic {
+  state={screen:this.props.startScreen||'dashboard',theme:this.props.theme||'light',client:0,
+    conn:{tiktok:true,meta:true,google:false,shopify:true,ga4:false},
+    alloc:{tiktok:90,meta:180,google:150},brief:{},bStep:0,obj:'Sales',plats:{tiktok:true,meta:true,google:true},split:'Copilot-weighted',submitted:false,
+    cf:'All',sel:2,attrModel:'Data-driven',rules:{1:true,2:true,3:true,4:true,5:false},appr:{},
+    messages:[{role:'user',text:'Why did blended ROAS drop last weekend?'},{role:'bot',text:'Blended ROAS fell from 4.3 to 3.6 on Oct 10–11. Here are the three drivers, largest first:',drivers:[{text:'TikTok CPMs rose 42% during a competitor\'s live event. Spend went up $3.1k with no extra conversions.',v:.38},{text:'Meta Retargeting frequency reached 7.8, and its marginal ROAS fell to 1.9.',v:.21},{text:'Google Shopping lost 12% impression share on "trail shoes" after a feed disapproval.',v:.12}],sources:'Sources · TikTok Ads API (hourly CPM) · Meta Ads API (frequency) · Google Merchant Center',actions:['Draft budget shift','Open feed issue']}],draft:''};
+  componentDidMount(){const h=(location.hash||'').slice(1);if(SCREENS.includes(h))this.setState({screen:h});this._h=()=>{const x=location.hash.slice(1);if(SCREENS.includes(x))this.setState({screen:x});};window.addEventListener('hashchange',this._h);}
+  componentWillUnmount(){window.removeEventListener('hashchange',this._h);}
+  go=s=>()=>{this.setState({screen:s});try{history.replaceState(null,'','#'+s);}catch(e){}window.scrollTo(0,0);};
+  sendText=t=>{if(!t.trim())return;this.setState(s=>({messages:[...s.messages,{role:'user',text:t},{role:'bot',...BOT_REPLY}],draft:''}));};
+  renderVals(){
+    const s=this.state,set=o=>this.setState(o);
+    const is={};SCREENS.forEach(x=>is[x]=s.screen===x);
+    const groups=[['Overview',[['dashboard','Command center'],['copilot','Copilot','⌘K']]],['Plan',[['planner','Planner'],['builder','Campaign builder']]],['Analyze',[['creative','Creative'],['attribution','Attribution']]],['Automate',[['rules','Rules & approvals',String(3-Object.keys(s.appr).length||'')]]],['Workspace',[['onboarding','Connections']]]];
+    const navGroups=groups.map(([label,items])=>({label,items:items.map(([id,l,badge])=>{const a=s.screen===id;return{label:l,badge:badge||'',go:this.go(id),bg:a?'var(--surface)':'transparent',color:a?'var(--ink)':'var(--ink2)',weight:a?600:500,shadow:a?'0 0 0 1px var(--line)':'none',dot:a?'var(--accent)':'var(--line2)'};})}));
+    const nConn=Object.values(s.conn).filter(Boolean).length;
+    const conDefs=[['tiktok','TikTok Ads','T','var(--tt)','Campaigns, creatives, video retention, Spark Ads','2 ad accounts'],['meta','Meta Ads','M','var(--me)','Facebook + Instagram ads, Conversions API events','3 ad accounts'],['google','Google Ads','G','var(--go)','Search, Shopping, PMax, YouTube and Demand Gen','1 MCC · 4 accounts'],['shopify','Shopify','S','oklch(0.55 0.10 150)','Orders, refunds, products, customer LTV','1 store'],['ga4','Google Analytics 4','A','oklch(0.55 0.02 280)','Sessions, landing pages, on-site funnel','1 property']];
+    const connectors=conDefs.map(([id,name,short,color,desc,det])=>{const on=s.conn[id];return{name,short,color,desc,detail:on?det:'',btn:on?'Connected ✓':'Connect',btnBg:on?'transparent':'var(--ink)',btnColor:on?'var(--pos)':'var(--bg)',btnBorder:on?'var(--line2)':'transparent',toggle:()=>set({conn:{...s.conn,[id]:!on}})};});
+    const obSteps=['Workspace','Connect accounts','Goals & KPIs','Historical import'].map((l,i)=>({label:l,bar:i<=1?'var(--accent)':'var(--line2)',color:i<=1?'var(--ink)':'var(--ink3)'}));
+    const kd=[['Spend','$184.3k','+8.2%',0,ser(30,6000,600,1)],['Revenue','$742.9k','+14.6%',1,ser(30,24000,2600,2)],['Blended ROAS','4.03','+0.24',1,ser(30,4,.3,3)],['CPA','$38.40','−6.1%',1,ser(30,40,3,4).map(v=>80-v)],['New customers','4,812','+11.0%',1,ser(30,160,18,5)]];
+    const kpis=kd.map(([label,value,delta,good,arr])=>({label,value,delta,deltaColor:good?'var(--pos)':'var(--ink2)',path:pth(arr,120,32)}));
+    const sp=ser(30,6000,700,1),rv=ser(30,24000,3200,2.4);const rp=pth(rv,1000,200,16);
+    const chart={rev:rp,area:rp+' L1000,200 L0,200 Z',spend:pth(sp,1000,200,40)};
+    const bdefs=[[1,'+$18.4k/wk','Move $6.2k a week from Meta Retargeting to TikTok Spark Ads','Retargeting frequency is 7.8 and its marginal ROAS is 1.9. TikTok Spark is returning 3.6× at the same spend level and is not yet saturated.','78% confidence · based on 24-month response curves'],[2,'+$7.9k/wk','Refresh "Morning routine 15s": hook rate is down 38% in 6 days','Fatigue started at frequency 4.2. Three variants built on your best-performing opening (face on screen in the first second) are ready to draft.','71% confidence · creative fatigue model'],[3,'+$4.7k/wk','Exclude brand terms from Google PMax','31% of PMax conversions come from branded queries your Search campaign already captures, so PMax looks better than it is.','83% confidence · search term overlap analysis']];
+    const briefing=bdefs.map(([id,impact,title,why,conf])=>{const st=s.brief[id]||'open';return{impact,title,why,conf,isOpen:st==='open',isDraft:st==='draft',isDismissed:st==='dismissed',opacity:st==='dismissed'?.55:1,review:()=>set({brief:{...s.brief,[id]:'draft'}}),dismiss:()=>set({brief:{...s.brief,[id]:'dismissed'}})};});
+    const pacing=[['tiktok',41200,60000,'3.4','On pace','var(--pos)'],['meta',92800,140000,'4.3','Ahead of plan by 12%, so expect to cap out around Oct 28','var(--warn)'],['google',50320,70000,'4.1','Slightly behind (−4%)','var(--ink2)']].map(([p,a,b,roas,status,c])=>({name:PL[p].name,color:PL[p].color,spent:k$(a),budget:k$(b),pct:(a/b*100).toFixed(0)+'%',roas,status,statusColor:c}));
+    const anomalies=[{title:'TikTok CPM +42% vs 7-day average',detail:'US · prospecting · started 14:00',when:'2h ago',color:'var(--neg)'},{title:'Meta purchase events −18%',detail:'Pixel and server events no longer match. Check the Conversions API token.',when:'5h ago',color:'var(--warn)'},{title:'Google Search CTR −22% on "trail running shoes"',detail:'A new competitor ad is ranking above you',when:'Yesterday',color:'var(--warn)'}];
+    const campaigns=[['meta','Prospecting — Broad (US)',48200,'4.6','3.1','$36.10','Scaling','var(--pos)'],['tiktok','Spark — Creator UGC',22400,'3.9','3.6','$31.80','Scaling','var(--pos)'],['google','PMax — All products',31900,'5.2','3.8','$29.40','Review','var(--warn)'],['meta','Retargeting — 30d visitors',27600,'6.1','1.9','$22.70','Saturated','var(--neg)'],['google','Search — Non-brand',18420,'4.0','4.2','$41.20','Stable','var(--ink2)'],['tiktok','Prospecting — Interests',18800,'2.8','2.4','$52.30','Watch','var(--warn)']].map(([p,name,sp,pr,mr,cpa,st,c])=>({name,color:PL[p].color,spend:k$(sp),proas:pr+'×',mroas:mr+'×',cpa,status:st,statusColor:c}));
+    const weeks=['Oct 5','Oct 12','Oct 19','Oct 26','Nov 2','Nov 9','Nov 16','Nov 23','Nov 30','Dec 7','Dec 14','Dec 21'];
+    const fl=[['Always-on prospecting','All platforms · $1.8k/day',0,84,['tiktok','meta','google'],'$151k'],['UGC creator push','TikTok · 6 creators',7,35,['tiktok'],'$38k'],['Brand search','Google · always-on',0,84,['google'],'$26k'],['Black Friday teaser','TikTok + Meta',35,49,['tiktok','meta'],'$42k'],['BFCM Sale','All platforms · approved',49,59,['tiktok','meta','google'],'$96k'],['Holiday gifting','Meta + Google',59,77,['meta','google'],'$67k']];
+    const flights=fl.map(([name,meta,a,b,ps,budget])=>({name,meta,budget,left:(a/84*100)+'%',width:((b-a)/84*100)+'%',dots:ps.map(p=>PL[p].color),bg:ps.length>1?'var(--accent-soft)':'color-mix(in oklch, '+PL[ps[0]].color+' 18%, var(--surface))',border:ps.length>1?'color-mix(in oklch, var(--accent) 30%, transparent)':'color-mix(in oklch, '+PL[ps[0]].color+' 40%, transparent)'}));
+    const total=Object.values(s.alloc).reduce((a,b)=>a+b,0);const opt=optimal(total);
+    let rev=0,optRev=0;const rows=Object.keys(PL).map(p=>{const v=s.alloc[p],r=fc(p,v);rev+=r;optRev+=fc(p,opt[p]);return{name:PL[p].name,color:PL[p].color,value:v,spend:k$(v*1000),share:Math.round(v/total*100)+'%',rev:k$(r*1000),roas:(r/v).toFixed(1),onChange:e=>set({alloc:{...s.alloc,[p]:+e.target.value}})};});
+    const gap=(rev-optRev)*1000;
+    const plan={rows,total:k$(total*1000),rev:k$(rev*1000),range:k$(rev*920)+' – '+k$(rev*1080),roas:(rev/total).toFixed(2)+'×',gap:Math.abs(gap)<500?'At optimum':(gap>0?'+':'−')+k$(Math.abs(gap)),gapColor:Math.abs(gap)<500?'var(--pos)':'var(--neg)',
+      suggestText:'Suggested for '+k$(total*1000)+': TikTok '+k$(opt.tiktok*1000)+', Meta '+k$(opt.meta*1000)+', Google '+k$(opt.google*1000)+'. This is where the next dollar earns the same return on every platform.',apply:()=>set({alloc:opt})};
+    const stepNames=['Objective','Audience','Budget','Creatives','Review'];
+    const bSteps=stepNames.map((l,i)=>({num:'0'+(i+1),label:l,go:()=>set({bStep:i}),bg:i===s.bStep?'var(--surface)':'transparent',color:i===s.bStep?'var(--ink)':i<s.bStep?'var(--ink2)':'var(--ink3)',weight:i===s.bStep?600:500}));
+    const bIs={};stepNames.forEach((_,i)=>bIs['s'+i]=s.bStep===i);
+    const objectives=[['Sales','Drive purchases on your store'],['Leads','Collect forms or sign-ups'],['App installs','Grow installs and in-app events'],['Awareness','Reach and video views']].map(([name,desc])=>({name,desc,pick:()=>set({obj:name}),border:s.obj===name?'var(--accent)':'var(--line)',bg:s.obj===name?'var(--accent-soft)':'transparent'}));
+    const platToggles=Object.keys(PL).map(p=>({name:PL[p].name,color:PL[p].color,toggle:()=>set({plats:{...s.plats,[p]:!s.plats[p]}}),border:s.plats[p]?'var(--accent)':'var(--line)',bg:s.plats[p]?'var(--accent-soft)':'transparent'}));
+    const splitModes=['Copilot-weighted','Even','Manual'].map(name=>({name,pick:()=>set({split:name}),border:s.split===name?'var(--accent)':'var(--line)',bg:s.split===name?'var(--accent-soft)':'transparent'}));
+    const W=s.split==='Even'?{tiktok:1,meta:1,google:1}:{tiktok:.3,meta:.45,google:.25};
+    const on=Object.keys(PL).filter(p=>s.plats[p]);const wsum=on.reduce((a,p)=>a+W[p],0)||1;
+    const OBJ={Sales:{tiktok:'Web conversions · Complete payment',meta:'Sales · Purchase (pixel + CAPI)',google:'Performance Max · Purchase'},Leads:{tiktok:'Lead generation · Instant form',meta:'Leads · Instant form',google:'Search · Submit lead form'},'App installs':{tiktok:'App promotion · Install',meta:'App promotion · Installs',google:'App campaign · Installs'},Awareness:{tiktok:'Reach · TopView eligible',meta:'Awareness · Reach',google:'Video reach · YouTube'}};
+    const AUD={tiktok:'Broad with seed as signal',meta:'Broad with seed as audience suggestion',google:'Audience signal: purchasers 180d'};
+    const CHK={tiktok:['⚠ 1 creative is 1:1. Add a 9:16 cut.','var(--warn)'],meta:['✓ All placements covered','var(--pos)'],google:['⚠ Add 2 more headlines (min. 3 for RSA)','var(--warn)']};
+    const translation=on.map(p=>({name:PL[p].name,color:PL[p].color,budget:'$'+Math.round(3000*W[p]/wsum).toLocaleString(),obj:OBJ[s.obj][p],aud:AUD[p],check:CHK[p][0],checkColor:CHK[p][1]}));
+    const builderCreatives=[['Trail test — founder','9:16 video','✓ All platforms','var(--pos)'],['Unboxing — Spark','9:16 video','✓ TikTok, Meta','var(--pos)'],['5 colorways','1:1 carousel','⚠ No 9:16 version','var(--warn)'],['BFCM offer card','4:5 image','✓ Meta, Google','var(--pos)']].map(([name,fmt,check,checkColor])=>({name,fmt,check,checkColor}));
+    const cFilters=['All','TikTok','Meta','Google'].map(l=>({label:l,pick:()=>set({cf:l}),bg:s.cf===l?'var(--ink)':'var(--surface)',color:s.cf===l?'var(--bg)':'var(--ink2)'}));
+    const FAT={Fresh:'var(--pos)',Watch:'var(--warn)',Fatigued:'var(--neg)'};
+    const pct=v=>v?v+'%':'—';
+    const creatives=CREATIVES.filter(c=>s.cf==='All'||PL[c.p].name===s.cf).map(c=>({name:c.name,fmt:c.fmt,color:PL[c.p].color,fatigue:c.fat,fatColor:FAT[c.fat],hook:pct(c.hook),hold:pct(c.hold),roas:c.roas+'×',border:c.id===s.sel?'var(--accent)':'var(--line)',select:()=>set({sel:c.id})}));
+    const sc=CREATIVES.find(c=>c.id===s.sel)||CREATIVES[0];
+    const ret=Array.from({length:16},(_,i)=>{const h=(sc.hook||30)/100,hd=(sc.hold||30)/100;return i===0?1:i<=3?1-(1-h)*(i/3)*1.1:h*(1-(1-hd)*((i-3)/12))*(1-.02*i);});
+    const cv=ret.map((v,i)=>(i?'L':'M')+(i/15*300).toFixed(1)+','+(108-Math.max(0,v)*100).toFixed(1)).join(' ');
+    const sel={name:sc.name,fmt:sc.fmt,color:PL[sc.p].color,pname:PL[sc.p].name,spend:k$(sc.spend),hook:pct(sc.hook),hold:pct(sc.hold),ctr:sc.ctr+'%',roas:sc.roas+'×',note:sc.note,curve:cv,area:cv+' L300,110 L0,110 Z'};
+    const models=Object.keys(ATTR).map(name=>({name,pick:()=>set({attrModel:name}),bg:s.attrModel===name?'var(--surface)':'transparent',color:s.attrModel===name?'var(--ink)':'var(--ink2)',shadow:s.attrModel===name?'0 1px 2px rgba(0,0,0,.08)':'none'}));
+    const M=ATTR[s.attrModel],B=ATTR.Platform,mx=10350;
+    const attrRows=Object.keys(PL).map(p=>{const d=(M[p]-B[p])/B[p]*100;return{name:PL[p].name,color:PL[p].color,pw:(B[p]/mx*100)+'%',mw:(M[p]/mx*100)+'%',conv:M[p].toLocaleString(),delta:Math.abs(d)<.5?'—':(d>0?'+':'−')+Math.abs(d).toFixed(0)+'%',deltaColor:d<-.5?'var(--neg)':d>.5?'var(--pos)':'var(--ink3)',roas:(M[p]*38.5/SPEND[p]).toFixed(2)+'×'};});
+    const fd=[['Impressions',48.2e6,'48.2M'],['Clicks',612e3,'612k'],['Sessions',540e3,'540k'],['Add to cart',61e3,'61k'],['Purchases',19.3e3,'19.3k']];
+    const funnel=fd.map(([label,v,value],i)=>({label,value,rate:i?(v/fd[i-1][1]*100).toFixed(i===1?2:1)+'%':'',w:Math.max(4,Math.pow(v/fd[0][1],.22)*100)+'%',op:1-i*.15}));
+    const cm=['May','Jun','Jul','Aug','Sep','Oct'],base=[100,31,24,20,17,15];const cohortCells=[];
+    cm.forEach((m,r)=>{cohortCells.push({text:m,bg:'transparent',color:'var(--ink3)',weight:500});for(let c=0;c<6;c++){if(c>5-r){cohortCells.push({text:'',bg:'transparent',color:'',weight:400});continue;}const v=c===0?100:Math.round(base[c]*(1+r*.04));cohortCells.push({text:c===0?'100':v+'',bg:'color-mix(in oklch, var(--accent) '+Math.round(c===0?70:v*1.6)+'%, transparent)',color:c===0||v>28?'#fff':'var(--ink)',weight:600});}});
+    const rd=[[1,'Fatigue guard','TikTok · all ad groups','hook rate drops more than 25% over 5 days on any ad','suggest a creative refresh with 3 variants drafted from your top hooks','Last triggered 2h ago · 14 suggestions this month · 11 approved','var(--tt)'],[2,'CPA ceiling','Meta · prospecting','CPA is above $45 for 3 days in a row on any ad set','suggest lowering its budget by 20%','Last triggered Oct 12 · 6 suggestions · 5 approved','var(--me)'],[3,'Scale winners','All platforms','modeled ROAS is above 4.5× and the campaign has spent less than 80% of its budget','suggest raising the budget by 15%, up to $2k/day','Last triggered yesterday · 9 suggestions · 7 approved','var(--accent)'],[4,'Brand leakage','Google · PMax','branded queries make up more than 25% of PMax conversions','suggest adding brand exclusions','Last triggered today · 1 suggestion','var(--go)'],[5,'Pacing drift','All platforms','monthly spend drifts more than 10% from the plan','notify #media-buying and the client lead','Paused','var(--ink3)']];
+    const rules=rd.map(([id,name,scope,cond,action,stats,color])=>{const en=s.rules[id];return{name,scope,cond,action,stats,color,opacity:en?1:.6,trackBg:en?'var(--accent)':'var(--line2)',knob:en?'19px':'3px',toggle:()=>set({rules:{...s.rules,[id]:!en}})};});
+    const ad=[[1,'Move $6.2k/wk from Meta Retargeting to TikTok Spark','Copilot briefing','Northwind (client)','+$18.4k rev/wk'],[2,'Raise "Search — Non-brand" budget +15%','Rule · Scale winners','Dana K. (lead buyer)','+$2.1k rev/wk'],[3,'Exclude brand terms from PMax — All products','Rule · Brand leakage','Dana K. (lead buyer)','+$4.7k rev/wk']];
+    const approvals=ad.map(([id,title,source,approver,impact])=>{const st=s.appr[id];return{title,source,approver,impact,isPending:!st,isDone:!!st,doneText:st==='ok'?'Approved · pushed to platforms 0:04 ago':'Rejected · reason logged for copilot',doneColor:st==='ok'?'var(--pos)':'var(--ink3)',approve:()=>set({appr:{...s.appr,[id]:'ok'}}),reject:()=>set({appr:{...s.appr,[id]:'no'}})};});
+    const messages=s.messages.map(m=>({isUser:m.role==='user',isBot:m.role==='bot',text:m.text,sources:m.sources||'',actions:m.actions||[],drivers:(m.drivers||[]).map(d=>({text:d.text,w:(d.v/.4*100)+'%',val:'−'+d.v.toFixed(2)}))}));
+    const prompts=['Plan a $50k BFCM budget across all three','Which creatives should I pause?','Compare Meta vs TikTok CAC for new customers'].map(t=>({text:t,send:()=>this.sendText(t)}));
+    return {theme:s.theme,themeLabel:s.theme==='light'?'Light':'Dark',toggleTheme:()=>set({theme:s.theme==='light'?'dark':'light'}),
+      client:CLIENTS[s.client],cycleClient:()=>set({client:(s.client+1)%CLIENTS.length}),navGroups,syncLabel:'Synced 3 min ago',
+      is,goCopilot:this.go('copilot'),goAttribution:this.go('attribution'),goDashboard:this.go('dashboard'),goBuilder:this.go('builder'),goRules:this.go('rules'),
+      attrModel:s.attrModel,connectors,obSteps,connectedCount:nConn,kpis,chart,briefing,pacing,anomalies,campaigns,
+      weeks,flights,todayLeft:(12/84*100)+'%',plan,bSteps,bIs,objectives,platToggles,splitModes,translation,builderCreatives,
+      builderSummary:on.map(p=>PL[p].name).join(', ')+' · '+s.obj+' · $3,000/day',submitLabel:s.submitted?'Submitted ✓ · awaiting client approval':'Submit for approval',submitBuild:()=>set({submitted:true}),
+      bPrev:()=>set({bStep:Math.max(0,s.bStep-1)}),bNext:()=>set({bStep:Math.min(4,s.bStep+1)}),
+      cFilters,creatives,sel,models,attrRows,funnel,cohortCells,rules,approvals,pendingCount:approvals.filter(a=>a.isPending).length,
+      messages,prompts,draft:s.draft,onDraft:e=>set({draft:e.target.value}),onKey:e=>{if(e.key==='Enter')this.sendText(s.draft);},send:()=>this.sendText(s.draft)};
+  }
+}
+</script>
+</body>
+</html>
