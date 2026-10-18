@@ -2,8 +2,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV } from "./nav";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
-export function Shell({ children }: { children: React.ReactNode }) {
+interface Props {
+  children: React.ReactNode;
+  workspaces: { id: string; name: string }[];
+  currentId: string | null;
+  syncLabel: string;
+}
+
+export function Shell({ children, workspaces, currentId, syncLabel }: Props) {
   const path = usePathname();
   if (path.startsWith("/login")) return <>{children}</>;
   return (
@@ -13,7 +21,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="logo-mark">a</div>
           <span className="logo-word">acezilla</span>
         </div>
-        <nav>
+        {currentId && <WorkspaceSwitcher workspaces={workspaces} currentId={currentId} />}
+        <nav style={{ flex: 1 }}>
           {NAV.map((g) => (
             <div key={g.label}>
               <div className="nav-label">{g.label}</div>
@@ -29,6 +38,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           ))}
         </nav>
+        <div className="eyebrow">{syncLabel}</div>
       </aside>
       <div>
         <header className="topbar">
