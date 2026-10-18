@@ -5,6 +5,7 @@ import { NAV } from "./nav";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  if (path.startsWith("/login")) return <>{children}</>;
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -32,6 +33,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div>
         <header className="topbar">
           <span className="badge">Suggest-only</span>
+          <form action="/auth/signout" method="post"><button className="link">Sign out</button></form>
         </header>
         <main className="content">{children}</main>
       </div>
