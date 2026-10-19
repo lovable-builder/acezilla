@@ -15,7 +15,7 @@ async function upsertIds(sb: SupabaseClient, table: string, rows: Record<string,
 }
 
 /** Writes a normalised Dataset into one workspace. Idempotent: re-running updates in place. */
-export async function ingestDataset(sb: SupabaseClient, workspaceId: string, platform: "mock" | "csv" | "meta", ds: Dataset) {
+export async function ingestDataset(sb: SupabaseClient, workspaceId: string, platform: "mock" | "csv" | "meta" | "google", ds: Dataset) {
   const now = new Date().toISOString();
   const { data: existing } = await sb.from("connection").select("id").eq("workspace_id", workspaceId).eq("platform", platform).limit(1);
   let connectionId = existing?.[0]?.id as string | undefined;

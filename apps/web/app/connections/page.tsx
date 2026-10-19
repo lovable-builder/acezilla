@@ -23,6 +23,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const mock = conns?.find((c) => c.platform === "mock");
   const csv = conns?.find((c) => c.platform === "csv");
   const meta = conns?.find((c) => c.platform === "meta");
+  const google = conns?.find((c) => c.platform === "google");
+  const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   return (
@@ -74,7 +76,19 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               : meta ? <Button asChild variant="outline"><Link href="/connections/meta">Choose accounts / sync</Link></Button>
               : <Button asChild><a href="/api/connect/meta/start">Connect Meta</a></Button>}
           </Card>
-          {PLATFORMS.filter((p) => p.id !== "meta").map((p) => (
+          <Card className="conn" style={{ flexWrap: "wrap" }}>
+            <Tile letter="G" color="var(--go)" />
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <b>Google Ads</b>
+              <div className="sub" style={{ margin: 0, fontSize: 13 }}>
+                {google ? `Connected, read-only.${google.last_sync_at ? ` Last sync ${ago(google.last_sync_at as string)}.` : " Choose accounts to import."}` : "Search, Shopping and Performance Max. Read-only access."}
+              </div>
+            </div>
+            {!googleReady && !google ? <Button variant="outline" disabled title="Add the Google secrets to .env.local">Not configured</Button>
+              : google ? <Button asChild variant="outline"><Link href="/connections/google">Choose accounts / sync</Link></Button>
+              : <Button asChild><a href="/api/connect/google/start">Connect Google</a></Button>}
+          </Card>
+          {PLATFORMS.filter((p) => p.id !== "meta" && p.id !== "google").map((p) => (
             <Card key={p.id} className="conn" style={{ opacity: 0.75 }}>
               <Tile letter={p.letter} color={p.color} />
               <div style={{ flex: 1 }}>
