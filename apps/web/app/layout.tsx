@@ -14,12 +14,13 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { workspaces, current } = await getWorkspaceContext();
+  const { supabase, workspaces, current } = await getWorkspaceContext();
+  const { data: auth } = await supabase.auth.getUser();
   const last = current ? await getLastSync(current.id) : null;
   return (
     <html lang="en" className={`${ui.variable} ${mono.variable}`}>
       <body suppressHydrationWarning>
-        <Shell workspaces={workspaces} currentId={current?.id ?? null} syncLabel={last ? `Synced ${ago(last)}` : "No data synced"}>
+        <Shell workspaces={workspaces} currentId={current?.id ?? null} email={auth.user?.email ?? null} syncLabel={last ? `Synced ${ago(last)}` : "No data synced"}>
           {children}
         </Shell>
       </body>

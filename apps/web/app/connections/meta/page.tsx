@@ -26,7 +26,7 @@ export default async function MetaAccounts({ searchParams }: { searchParams: Pro
       <div>
         <div className="eyebrow">Meta Ads · choose accounts</div>
         <h1 className="page">Which ad accounts should acezilla read?</h1>
-        <p className="sub">Read-only. We import the last 90 days and never change a campaign without your approval.</p>
+        <p className="sub">Read-only. We import your history and never change a campaign without your approval.</p>
       </div>
       {loadError && <Card style={{ color: "var(--neg)" }}>{loadError}</Card>}
       <form action={saveAndSync} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -40,6 +40,17 @@ export default async function MetaAccounts({ searchParams }: { searchParams: Pro
           </Card>
         ))}
         {accounts.length === 0 && !loadError && <Card>No ad accounts found for this login. Make sure your Meta user has access to an ad account in the business portfolio.</Card>}
+        {accounts.length > 0 && (
+          <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="eyebrow">History</span>
+            <select name="range" defaultValue="730" className="field" style={{ padding: "8px 10px" }}>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last 12 months</option>
+              <option value="730">Last 24 months</option>
+              <option value="1095">Last 36 months (Meta's maximum)</option>
+            </select>
+          </label>
+        )}
         <div style={{ display: "flex", gap: 10 }}>
           {accounts.length > 0 && <Button>Import selected accounts</Button>}
           <Button asChild variant="outline"><Link href="/connections">Back</Link></Button>

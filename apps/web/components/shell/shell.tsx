@@ -9,9 +9,10 @@ interface Props {
   workspaces: { id: string; name: string }[];
   currentId: string | null;
   syncLabel: string;
+  email: string | null;
 }
 
-export function Shell({ children, workspaces, currentId, syncLabel }: Props) {
+export function Shell({ children, workspaces, currentId, syncLabel, email }: Props) {
   const path = usePathname();
   if (path.startsWith("/login")) return <>{children}</>;
   return (
@@ -43,6 +44,7 @@ export function Shell({ children, workspaces, currentId, syncLabel }: Props) {
       <div>
         <header className="topbar">
           <span className="badge">Suggest-only</span>
+          {email && <span className="eyebrow" title="Signed in as">{email}</span>}
           <form action="/auth/signout" method="post"><button className="link">Sign out</button></form>
         </header>
         <main className="content">{children}</main>

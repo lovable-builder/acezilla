@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireWriter } from "@/lib/workspace";
 
 const fail = (m: string) => redirect(`/connections/meta?error=${encodeURIComponent(m)}`);
-const DAYS = 90;
+const RANGES = [90, 365, 730, 1095]; // Meta keeps ~37 months of insights
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 async function token(workspaceId: string) {
@@ -18,9 +18,11 @@ async function token(workspaceId: string) {
   return { admin, accessToken: decryptToken(data.token_enc as string) };
 }
 
-/** Saves the chosen ad accounts, then pulls the last 90 days. Read-only: no write scope is ever requested. */
+/** Saves the chosen ad accounts, then pulls the chosen history (default 2 years). Read-only: no write scope is ever requested. */
 export async function saveAndSync(formData: FormData) {
   const ids = formData.getAll("account").map(String);
+  const asked = Number(formData.get("range"));
+  const DAYS = RANGES.includes(asked) ? asked : 730;
   if (ids.length === 0) return fail("Pick at least one ad account");
   let result: string;
   try {
@@ -32,7 +34,9 @@ export async function saveAndSync(formData: FormData) {
     const until = new Date(), since = new Date(Date.now() - DAYS * 86400000);
     const ds = await fetchMetaDataset({ accessToken, version: process.env.META_GRAPH_VERSION }, chosen, iso(since), iso(until));
     const r = await ingestDataset(admin, workspace.id, "meta", ds);
-    result = `Synced ${r.campaigns} campaigns and ${r.insights} daily rows from Meta`;
+    result = r.insights === 0
+      ? `Connected ${chosen.map((a) => a.name).join(", ")}, but found no ad spend in the last ${DAYS} days. Try a longer range or an account with campaigns.`
+      : `Synced ${r.campaigns} campaigns and ${r.insights} daily rows from Meta`;
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Meta sync failed");
   }
