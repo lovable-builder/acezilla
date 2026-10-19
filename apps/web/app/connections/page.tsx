@@ -22,6 +22,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
     : { data: [] };
   const mock = conns?.find((c) => c.platform === "mock");
   const csv = conns?.find((c) => c.platform === "csv");
+  const meta = conns?.find((c) => c.platform === "meta");
+  const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   return (
     <>
@@ -60,7 +62,19 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               <Button variant="outline">Import</Button>
             </form>
           </Card>
-          {PLATFORMS.map((p) => (
+          <Card className="conn" style={{ flexWrap: "wrap" }}>
+            <Tile letter="M" color="var(--me)" />
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <b>Meta Ads</b>
+              <div className="sub" style={{ margin: 0, fontSize: 13 }}>
+                {meta ? `Connected, read-only.${meta.last_sync_at ? ` Last sync ${ago(meta.last_sync_at as string)}.` : " Choose accounts to import."}` : "Facebook and Instagram campaigns. Read-only access."}
+              </div>
+            </div>
+            {!metaReady && !meta ? <Button variant="outline" disabled title="Add the Meta secrets to .env.local">Not configured</Button>
+              : meta ? <Button asChild variant="outline"><Link href="/connections/meta">Choose accounts / sync</Link></Button>
+              : <Button asChild><a href="/api/connect/meta/start">Connect Meta</a></Button>}
+          </Card>
+          {PLATFORMS.filter((p) => p.id !== "meta").map((p) => (
             <Card key={p.id} className="conn" style={{ opacity: 0.75 }}>
               <Tile letter={p.letter} color={p.color} />
               <div style={{ flex: 1 }}>

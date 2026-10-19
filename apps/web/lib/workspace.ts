@@ -20,3 +20,15 @@ export async function getLastSync(workspaceId: string): Promise<string | null> {
     .not("last_sync_at", "is", null).order("last_sync_at", { ascending: false }).limit(1);
   return (data?.[0]?.last_sync_at as string | undefined) ?? null;
 }
+
+/** Signed-in user who may change data in the active workspace (owner/admin/buyer). Throws otherwise. */
+export async function requireWriter() {
+  const { supabase, current } = await getWorkspaceContext();
+  if (!current) throw new Error("No workspace");
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Not signed in");
+  const { data: ws } = await supabase.from("workspace").select("org_id").eq("id", current.id).single();
+  const { data: m } = await supabase.from("org_member").select("role").eq("org_id", ws?.org_id).eq("user_id", auth.user.id).maybeSingle();
+  if (!m || !["owner", "admin", "buyer"].includes(m.role as string)) throw new Error("You don't have permission to connect accounts");
+  return { supabase, workspace: current, user: auth.user };
+}
