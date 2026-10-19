@@ -53,7 +53,8 @@ async function call<T>(o: GoogleOptions, method: "GET" | "POST", path: string, o
     if (res.ok) return json as T;
     const retryable = res.status === 429 || res.status >= 500;
     if (retryable && attempt < (o.maxRetries ?? 3)) { await sleep(2 ** attempt * 1000); continue; }
-    throw new GoogleApiError(json.error?.message ?? `Google Ads API HTTP ${res.status}`, res.status, retryable);
+    const detail = json.error?.details?.flatMap((d: any) => d.errors ?? []).find((e: any) => e.message)?.message;
+    throw new GoogleApiError(detail ?? json.error?.message ?? `Google Ads API HTTP ${res.status}`, res.status, retryable);
   }
 }
 
@@ -73,6 +74,7 @@ export async function listGoogleAdAccounts(o: GoogleOptions): Promise<GoogleAdAc
   const r = await call<{ resourceNames?: string[] }>(o, "GET", "customers:listAccessibleCustomers");
   const ids = (r.resourceNames ?? []).map((n) => digits(n));
   const found = new Map<string, GoogleAdAccount>();
+  let lastError: unknown;
   for (const id of ids) {
     try {
       const rows = await gaql<any>(o, id, "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.manager FROM customer LIMIT 1");
@@ -86,8 +88,9 @@ export async function listGoogleAdAccounts(o: GoogleOptions): Promise<GoogleAdAc
         const kid = digits(String(cc.id));
         if (!found.has(kid)) found.set(kid, { id: kid, name: cc.descriptiveName || `Account ${kid}`, currency: cc.currencyCode ?? "USD", loginCustomerId: id });
       }
-    } catch { /* an account we cannot read (disabled, no access) is skipped, not fatal */ }
+    } catch (e) { lastError = e; /* an unreadable account is skipped, but if nothing is readable we report why */ }
   }
+  if (found.size === 0 && lastError) throw lastError;
   return [...found.values()];
 }
 

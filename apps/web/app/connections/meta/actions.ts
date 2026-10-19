@@ -34,9 +34,13 @@ export async function saveAndSync(formData: FormData) {
     const until = new Date(), since = new Date(Date.now() - DAYS * 86400000);
     const ds = await fetchMetaDataset({ accessToken, version: process.env.META_GRAPH_VERSION }, chosen, iso(since), iso(until));
     const r = await ingestDataset(admin, workspace.id, "meta", ds);
+    // Editing the selection: accounts that were unticked stop syncing and their imported data is removed.
+    const keep = chosen.map((a) => `meta-acct-${a.id}`);
+    const { count: removed } = await admin.from("ad_account").delete({ count: "exact" })
+      .eq("workspace_id", workspace.id).eq("platform", "meta").not("external_id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
     result = r.insights === 0
       ? `Connected ${chosen.map((a) => a.name).join(", ")}, but found no ad spend in the last ${DAYS} days. Try a longer range or an account with campaigns.`
-      : `Synced ${r.campaigns} campaigns and ${r.insights} daily rows from Meta`;
+      : `Synced ${r.campaigns} campaigns and ${r.insights} daily rows from Meta${removed ? `. Removed ${removed} unselected account${removed === 1 ? "" : "s"}.` : ""}`;
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Meta sync failed");
   }

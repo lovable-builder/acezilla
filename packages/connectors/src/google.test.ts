@@ -77,3 +77,10 @@ test("retries rate limits and surfaces permanent errors", async () => {
   await assert.rejects(listGoogleAdAccounts({ accessToken: "t", fetch: denied.f }), (e) => e instanceof GoogleApiError && e.status === 403 && !e.retryable);
   assert.equal(denied.calls.length, 1);
 });
+
+test("explains why when every accessible account is unreadable", async () => {
+  const { f } = router((c) => c.url.endsWith("customers:listAccessibleCustomers")
+    ? ok({ resourceNames: ["customers/3562281131"] })
+    : err(403, { error: { message: "The caller does not have permission", details: [{ errors: [{ message: "The customer account can't be accessed because it is not yet enabled or has been deactivated." }] }] } }));
+  await assert.rejects(listGoogleAdAccounts({ accessToken: "t", fetch: f }), /not yet enabled or has been deactivated/);
+});
