@@ -1,4 +1,5 @@
 "use client";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -33,7 +34,7 @@ export default function Login() {
     <div className="auth-wrap">
       <form className="card auth-card" onSubmit={submit}>
         <div className="logo">
-          <div className="logo-mark">a</div>
+          <BrandMark size={34} />
           <span className="logo-word">acezilla</span>
         </div>
         <h1 className="page" style={{ fontSize: 26 }}>{mode === "in" ? "Welcome back" : "Create your workspace"}</h1>

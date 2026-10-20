@@ -1,4 +1,5 @@
 "use client";
+import { BrandMark } from "@/components/brand/brand-mark";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV } from "./nav";
@@ -18,7 +19,7 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
     <div className="shell">
       <aside className="sidebar">
         <Link href="/dashboard" className="logo">
-          <div className="logo-mark">a</div>
+          <BrandMark size={30} />
           <span className="logo-word">acezilla</span>
         </Link>
         {currentId && <WorkspaceSwitcher workspaces={workspaces} currentId={currentId} />}

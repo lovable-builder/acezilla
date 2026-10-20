@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand/brand-mark";
 import Link from "next/link";
 import { CONTACT_EMAIL } from "@/lib/legal";
 
@@ -10,7 +11,7 @@ export function LegalDoc({ title, updated, children }: { title: string; updated:
     <div style={{ minHeight: "100vh", padding: "40px 16px 80px" }}>
       <article style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
         <Link href="/" className="logo" style={{ marginBottom: 12 }}>
-          <div className="logo-mark">a</div><span className="logo-word">acezilla</span>
+          <BrandMark size={32} /><span className="logo-word">acezilla</span>
         </Link>
         <div className="eyebrow">Effective {updated}</div>
         <h1 className="page">{title}</h1>

@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand/brand-mark";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -56,7 +57,7 @@ export default function Landing() {
     <div className="lp">
       {/* ---------- nav ---------- */}
       <header className="lp-nav">
-        <Link href="/" className="lp-brand"><span className="logo-mark">a</span><span className="logo-word">acezilla</span></Link>
+        <Link href="/" className="lp-brand"><BrandMark size={34} /><span className="logo-word">acezilla</span></Link>
         <nav className="lp-links" aria-label="Sections">
           <a href="#how">How it works</a><a href="#features">Features</a><a href="#trust">Trust</a><a href="#faq">FAQ</a>
         </nav>
@@ -216,7 +217,7 @@ export default function Landing() {
       {/* ---------- footer ---------- */}
       <footer className="lp-footer">
         <div className="lp-wrap">
-          <Link href="/" className="lp-brand"><span className="logo-mark">a</span><span className="logo-word">acezilla</span></Link>
+          <Link href="/" className="lp-brand"><BrandMark size={30} /><span className="logo-word">acezilla</span></Link>
           <nav aria-label="Legal"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/data-deletion">Data deletion</Link>{CONTACT_EMAIL ? <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a> : null}</nav>
           <p>© 2026 acezilla. Meta, Google, TikTok and Shopify are trademarks of their owners and are used only to identify the platforms acezilla connects to.</p>
         </div>
