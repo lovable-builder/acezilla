@@ -1,11 +1,8 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { z } from "zod";
 import { buildFixPrompt, FIX_SYSTEM, planFixTargets, validateFixes, type DraftedFix, type PageData } from "@acezilla/seo";
 
-const MODEL = "claude-opus-5-5";
-const Output = z.object({ fixes: z.array(z.object({ id: z.number(), proposed: z.string(), rationale: z.string() })) });
+const ENDPOINT = "https://api.deepseek.com/chat/completions";
+const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
 export type FixResult = { ok: true; fixes: DraftedFix[]; planned: number } | { ok: false; reason: string };
 
@@ -14,23 +11,29 @@ export type FixResult = { ok: true; fixes: DraftedFix[]; planned: number } | { o
  * wording. Page text is untrusted, so what comes back is re-validated in code and anything off-spec is dropped.
  * Never throws: with no key or any API failure the audit still completes, just without drafts.
  */
-export async function draftFixes(pages: PageData[], client?: Anthropic): Promise<FixResult> {
+export async function draftFixes(pages: PageData[], fetchImpl: typeof fetch = fetch): Promise<FixResult> {
   const targets = planFixTargets(pages);
   if (targets.length === 0) return { ok: true, fixes: [], planned: 0 };
-  if (!client && !process.env.ANTHROPIC_API_KEY) return { ok: false, reason: "ANTHROPIC_API_KEY is not set" };
+  const key = process.env.DEEPSEEK_API_KEY;
+  if (!key) return { ok: false, reason: "DEEPSEEK_API_KEY is not set" };
   try {
-    const api = client ?? new Anthropic({ maxRetries: 2, timeout: 90_000 });
-    const res = await api.messages.parse({
-      model: MODEL,
-      max_tokens: 8000,
-      system: FIX_SYSTEM,
-      messages: [{ role: "user", content: buildFixPrompt(targets) }],
-      output_config: { effort: "low", format: zodOutputFormat(Output) },
+    const res = await fetchImpl(ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: MODEL, max_tokens: 4000, temperature: 0.3, response_format: { type: "json_object" },
+        messages: [{ role: "system", content: FIX_SYSTEM }, { role: "user", content: buildFixPrompt(targets) }],
+      }),
+      signal: AbortSignal.timeout(90_000),
     });
-    if (res.stop_reason === "refusal") return { ok: false, reason: "The model declined to draft fixes for this site" };
-    if (!res.parsed_output) return { ok: false, reason: `No usable output (${res.stop_reason})` };
-    return { ok: true, fixes: validateFixes(targets, res.parsed_output), planned: targets.length };
+    if (!res.ok) return { ok: false, reason: `DeepSeek API ${res.status}` };
+    const body = (await res.json()) as { choices?: { message?: { content?: string }; finish_reason?: string }[] };
+    const choice = body.choices?.[0];
+    if (!choice?.message?.content || choice.finish_reason === "length") return { ok: false, reason: "No usable output" };
+    let raw: unknown;
+    try { raw = JSON.parse(choice.message.content); } catch { return { ok: false, reason: "Output was not valid JSON" }; }
+    return { ok: true, fixes: validateFixes(targets, raw), planned: targets.length };
   } catch (e) {
-    return { ok: false, reason: e instanceof Anthropic.APIError ? `Claude API ${e.status ?? "error"}` : "Drafting failed" };
+    return { ok: false, reason: e instanceof Error && e.name === "TimeoutError" ? "DeepSeek timed out" : "Drafting failed" };
   }
 }

@@ -46,7 +46,9 @@ Rules:
 - h1: ${LIMITS.h1[0]}-${LIMITS.h1[1]} characters, plain text, one clear heading that names the topic.
 - faq: a schema.org FAQPage as a JSON string ("@context","@type","mainEntity" of Question/acceptedAnswer). 3 to 5 questions a visitor would ask, each answered only from the page data in under 60 words.
 - schema_org: a schema.org Organization as a JSON string with "@context","@type","name","url" and, only if present in the page data, "description" and "logo". Do not add sameAs.
-- Return one entry per target id. "rationale" is one short sentence for the site owner on why the change helps.`;
+- Return one entry per target id. "rationale" is one short sentence for the site owner on why the change helps.
+
+Respond with JSON only, in exactly this shape: {"fixes":[{"id":0,"proposed":"...","rationale":"..."}]}`;
 
 const safeJson = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 
