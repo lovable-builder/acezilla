@@ -14,7 +14,6 @@ interface Props {
 
 export function Shell({ children, workspaces, currentId, syncLabel, email }: Props) {
   const path = usePathname();
-  if (["/login", "/privacy", "/terms", "/data-deletion"].some((p) => path.startsWith(p))) return <>{children}</>;
   return (
     <div className="shell">
       <aside className="sidebar">
