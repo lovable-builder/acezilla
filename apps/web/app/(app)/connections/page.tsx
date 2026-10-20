@@ -93,7 +93,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
           <div style={{ background: "var(--accent-soft)", color: "var(--accent-ink)", borderRadius: 10, padding: 16, fontSize: 14 }}>
             <b>Suggest-only.</b> acezilla reads your data. Nothing changes in a live campaign until a person approves it.
           </div>
-          <Button asChild><Link href="/">Continue to dashboard →</Link></Button>
+          <Button asChild><Link href="/dashboard">Continue to dashboard →</Link></Button>
         </div>
       </div>
     </>

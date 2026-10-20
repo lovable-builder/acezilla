@@ -17,17 +17,17 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="logo">
+        <Link href="/dashboard" className="logo">
           <div className="logo-mark">a</div>
           <span className="logo-word">acezilla</span>
-        </div>
+        </Link>
         {currentId && <WorkspaceSwitcher workspaces={workspaces} currentId={currentId} />}
         <nav style={{ flex: 1 }}>
           {NAV.map((g) => (
             <div key={g.label}>
               <div className="nav-label">{g.label}</div>
               {g.items.map((i) => {
-                const active = i.href === "/" ? path === "/" : path.startsWith(i.href);
+                const active = path.startsWith(i.href);
                 return (
                   <Link key={i.href} href={i.href} className={`nav-item${active ? " active" : ""}`}>
                     {active && <span className="nav-dot" />}

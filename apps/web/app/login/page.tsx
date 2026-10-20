@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -10,6 +10,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Landing-page buttons link here with ?mode=signup
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("mode") === "signup") setMode("up"); }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,7 +25,7 @@ export default function Login() {
     setBusy(false);
     if (error) return setMsg(error.message);
     if (!data.session) return setMsg("Check your email to confirm your account, then sign in.");
-    router.replace("/");
+    router.replace("/dashboard");
     router.refresh();
   }
 

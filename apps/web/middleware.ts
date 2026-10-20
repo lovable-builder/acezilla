@@ -8,6 +8,8 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   // Decide before touching the auth server: public pages must not pay for a network round trip.
   if (PUBLIC.some((p) => path === p || path.startsWith(`${p}/`))) return NextResponse.next();
+  // Landing page: visitors without a session cookie get the static page with no network call at all.
+  if (path === "/" && !req.cookies.getAll().some((c) => c.name.startsWith("sb-"))) return NextResponse.next();
 
   let res = NextResponse.next({ request: req });
   const supabase = createServerClient(
@@ -28,8 +30,9 @@ export async function middleware(req: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = !!data?.claims;
   const isAuthPage = path.startsWith("/login");
+  if (path === "/") return signedIn ? NextResponse.redirect(new URL("/dashboard", req.url)) : res;
   if (!signedIn && !isAuthPage) return NextResponse.redirect(new URL("/login", req.url));
-  if (signedIn && isAuthPage) return NextResponse.redirect(new URL("/", req.url));
+  if (signedIn && isAuthPage) return NextResponse.redirect(new URL("/dashboard", req.url));
   return res;
 }
 
