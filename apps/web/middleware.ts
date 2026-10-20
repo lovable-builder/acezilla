@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Public: legal pages (platform reviews need them) and the cron endpoint (it checks its own secret).
-const PUBLIC = ["/privacy", "/terms", "/data-deletion", "/api/cron"];
+const PUBLIC = ["/privacy", "/terms", "/data-deletion", "/api/cron", "/auth/callback", "/forgot-password"];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
