@@ -1,11 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { SITE } from "@/lib/legal";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const ui = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
 
+export const viewport: Viewport = { themeColor: "#111015" };
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE),
   title: "acezilla",
   description: "Plan, buy and understand paid media in one loop.",
 };

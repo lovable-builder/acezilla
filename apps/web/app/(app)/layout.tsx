@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { Shell } from "@/components/shell/shell";
 import { getLastSync, getWorkspaceContext } from "@/lib/workspace";
 import { ago } from "@/lib/format";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 /** The signed-in app. Public pages (login, legal) live outside this group so they never touch the database. */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Contact, LegalDoc } from "@/components/legal/doc";
 import { COMPANY, EFFECTIVE } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Terms of Service · acezilla" };
+export const metadata: Metadata = { title: "Terms of Service · acezilla", alternates: { canonical: "/terms" } };
 
 export default function Terms() {
   return (

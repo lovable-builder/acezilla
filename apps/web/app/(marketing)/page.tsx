@@ -19,8 +19,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: TITLE,
   description: DESC,
-  openGraph: { title: TITLE, description: DESC, url: SITE, siteName: "acezilla", type: "website", images: [{ url: hub.src, width: hub.width, height: hub.height }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESC, images: [hub.src] },
+  alternates: { canonical: "/" },
+  openGraph: { title: TITLE, description: DESC, url: SITE, siteName: "acezilla", type: "website" },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESC },
 };
 
 const FEATURES = [
@@ -52,9 +53,21 @@ const BUILT_FOR = [
   { t: "Agencies and media buyers", d: "Client workspaces, approvals and shareable reporting, all built around the same suggest-only rule." },
 ];
 
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "Organization", "@id": `${SITE}/#org`, name: "acezilla", url: SITE, logo: `${SITE}/icon.png` },
+    { "@type": "WebSite", "@id": `${SITE}/#site`, url: SITE, name: "acezilla", publisher: { "@id": `${SITE}/#org` }, inLanguage: "en" },
+    { "@type": "SoftwareApplication", name: "acezilla", url: SITE, applicationCategory: "BusinessApplication", operatingSystem: "Web", description: DESC, publisher: { "@id": `${SITE}/#org` } },
+    { "@type": "FAQPage", mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })) },
+  ],
+};
+
 export default function Landing() {
   return (
     <div className="lp">
+      {/* Structured data mirrors the visible FAQ and product description; "<" is escaped so content can never close the script tag. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c") }} />
       {/* ---------- nav ---------- */}
       <header className="lp-nav">
         <Link href="/" className="lp-brand"><BrandMark size={34} /><span className="logo-word">acezilla</span></Link>

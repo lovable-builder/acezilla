@@ -2,12 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Public: legal pages (platform reviews need them) and the cron endpoint (it checks its own secret).
-const PUBLIC = ["/privacy", "/terms", "/data-deletion", "/api/cron", "/auth/callback", "/forgot-password"];
+const PUBLIC = ["/privacy", "/terms", "/data-deletion", "/api/cron", "/auth/callback", "/forgot-password", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/opengraph-image", "/twitter-image"];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   // Decide before touching the auth server: public pages must not pay for a network round trip.
   if (PUBLIC.some((p) => path === p || path.startsWith(`${p}/`))) return NextResponse.next();
+  // Next suffixes generated share-image routes (e.g. /opengraph-image-ab12cd), so match them by prefix.
+  if (path.startsWith("/opengraph-image") || path.startsWith("/twitter-image")) return NextResponse.next();
   // Landing page: visitors without a session cookie get the static page with no network call at all.
   if (path === "/" && !req.cookies.getAll().some((c) => c.name.startsWith("sb-"))) return NextResponse.next();
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Contact, LegalDoc } from "@/components/legal/doc";
 import { EFFECTIVE } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Data deletion · acezilla" };
+export const metadata: Metadata = { title: "Data deletion · acezilla", alternates: { canonical: "/data-deletion" } };
 
 export default function DataDeletion() {
   return (
