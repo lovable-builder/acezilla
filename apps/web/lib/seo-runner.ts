@@ -1,6 +1,7 @@
 import "server-only";
 import { crawlSite, scoreAudit } from "@acezilla/seo";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { draftFixes } from "@/lib/seo-fixes";
 
 type Admin = ReturnType<typeof createAdminClient>;
 /** Guards cost and abuse. Raise them when billing exists. */
@@ -29,6 +30,11 @@ export async function runAudit(admin: Admin, auditId: string): Promise<void> {
 
     await admin.from("seo_page").insert(crawl.pages.map((p) => { const { text: _text, ...data } = p; return { audit_id: auditId, workspace_id: ws, url: p.url, data }; }));
     await admin.from("seo_finding").insert(result.findings.map((f) => ({ audit_id: auditId, workspace_id: ws, dimension: f.dimension, grp: f.group, signal: f.signal, finding: f.finding, status: f.status, weight: f.weight, page_url: f.pageUrl ?? null, fix_kind: f.fixKind ?? null })));
+    // AI-drafted wording is a bonus: if it fails, the audit is still complete and the reason is only logged.
+    const drafted = await draftFixes(crawl.pages);
+    if (drafted.ok && drafted.fixes.length) {
+      await admin.from("seo_fix").insert(drafted.fixes.map((f) => ({ audit_id: auditId, workspace_id: ws, kind: f.kind, page_url: f.pageUrl, signal: null, current: f.current, proposed: f.proposed, rationale: f.rationale })));
+    } else if (!drafted.ok) console.warn("[seo] fixes not drafted:", drafted.reason);
     const now = new Date().toISOString();
     await admin.from("seo_audit").update({ status: "done", scores: result.scores, summary: result.summary, pages_crawled: crawl.pages.length, finished_at: now }).eq("id", auditId);
     await admin.from("seo_site").update({ last_audit_at: now }).eq("id", site.id);
