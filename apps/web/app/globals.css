@@ -141,3 +141,24 @@ table.t th:first-child, table.t td:first-child { text-align: left; }
 .seo-mini span { min-width: 54px; text-align: center; padding: 6px 8px; border-radius: 10px; background: var(--surface2); font-size: 12px; }
 .seo-mini b { display: block; font-size: 18px; font-weight: 600; }
 @media (max-width: 640px) { .seo-rings { grid-template-columns: 1fr; } }
+
+/* Mobile: the sidebar becomes a slide-in drawer opened from the top bar. */
+.menu-btn { display: none; width: 38px; height: 38px; place-items: center; border: 1px solid var(--line2); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.scrim { display: none; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    position: fixed; z-index: 30; inset: 0 auto 0 0; width: min(280px, 84vw); height: 100dvh; overflow-y: auto;
+    background: var(--bg); transform: translateX(-100%); visibility: hidden;
+    transition: transform 200ms ease-out, visibility 0s linear 200ms;
+  }
+  .sidebar.open { transform: none; visibility: visible; transition: transform 200ms ease-out; box-shadow: 0 0 40px color-mix(in srgb, var(--ink) 25%, transparent); }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 20; border: 0; padding: 0; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+  .menu-btn { display: grid; }
+  .topbar { padding: 10px 16px; gap: 8px; }
+  .topbar .eyebrow { display: none; }
+  .badge { margin-left: auto; }
+  .content { padding: 20px 16px 48px; gap: 20px; }
+  h1.page { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar, .sidebar.open { transition: none; } }
