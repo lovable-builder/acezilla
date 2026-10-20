@@ -10,8 +10,8 @@ export async function middleware(req: NextRequest) {
   if (PUBLIC.some((p) => path === p || path.startsWith(`${p}/`))) return NextResponse.next();
   // Next suffixes generated share-image routes (e.g. /opengraph-image-ab12cd), so match them by prefix.
   if (path.startsWith("/opengraph-image") || path.startsWith("/twitter-image")) return NextResponse.next();
-  // Landing page: visitors without a session cookie get the static page with no network call at all.
-  if (path === "/" && !req.cookies.getAll().some((c) => c.name.startsWith("sb-"))) return NextResponse.next();
+  // The landing page is for everyone, signed in or not: a static page with no network call.
+  if (path === "/") return NextResponse.next();
 
   let res = NextResponse.next({ request: req });
   const supabase = createServerClient(
@@ -32,7 +32,6 @@ export async function middleware(req: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = !!data?.claims;
   const isAuthPage = path.startsWith("/login");
-  if (path === "/") return signedIn ? NextResponse.redirect(new URL("/dashboard", req.url)) : res;
   if (!signedIn && !isAuthPage) return NextResponse.redirect(new URL("/login", req.url));
   if (signedIn && isAuthPage) return NextResponse.redirect(new URL("/dashboard", req.url));
   return res;

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { NavActions } from "@/components/landing/nav-actions";
 import { ProductPreview } from "@/components/landing/product-preview";
 import { Reveal } from "@/components/landing/reveal";
 import { CONTACT_EMAIL, SITE } from "@/lib/legal";
@@ -75,8 +76,7 @@ export default function Landing() {
           <a href="#how">How it works</a><a href="#features">Features</a><a href="#trust">Trust</a><a href="#faq">FAQ</a>
         </nav>
         <div className="lp-nav-cta">
-          <Link href="/login" className="lp-btn lp-btn-ghost">Sign in</Link>
-          <Link href="/login?mode=signup" className="lp-btn lp-btn-solid">Get started</Link>
+          <NavActions />
         </div>
       </header>
 

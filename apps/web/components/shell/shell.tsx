@@ -43,6 +43,7 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
       </aside>
       <div>
         <header className="topbar">
+          <Link href="/" className="link" title="Back to the acezilla website">← Website</Link>
           <span className="badge">Suggest-only</span>
           {email && <span className="eyebrow" title="Signed in as">{email}</span>}
           <form action="/auth/signout" method="post"><button className="link">Sign out</button></form>
