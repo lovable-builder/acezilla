@@ -4,6 +4,7 @@ import {
   refreshGoogleAccessToken,
 } from "@acezilla/connectors";
 import { decryptToken } from "@/lib/crypto";
+import { alertIfNeeded } from "@/lib/alerts";
 import { ingestDataset } from "@/lib/ingest";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
@@ -60,6 +61,7 @@ export async function syncAll(admin: Admin, budgetMs = 240_000) {
   for (const c of data ?? []) {
     if (Date.now() - started > budgetMs) { skipped++; continue; }
     const r = await syncConnection(admin, c as ConnRow);
+    try { await alertIfNeeded(admin, c.id as string); } catch (e) { console.warn("[alerts] failed", e instanceof Error ? e.message : e); }
     results.push(r.ok ? { platform: c.platform, ok: true, rows: r.rows } : { platform: c.platform, ok: false, error: r.error.slice(0, 120) });
   }
   return { synced: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, skipped, results };
