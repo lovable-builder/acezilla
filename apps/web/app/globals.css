@@ -126,3 +126,18 @@ table.t th:first-child, table.t td:first-child { text-align: left; }
 .fc-soon { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
 @media (max-width: 820px) { .fc-slide { grid-template-columns: 1fr; gap: 22px; padding: 28px 22px 76px; min-height: 0; } }
 @media (prefers-reduced-motion: reduce) { .fc-track, .fc-bar u { transition: none; } }
+
+/* ---- SEO audits ---- */
+.seo-rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.seo-ring { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.seo-ring-label { font-size: 12px; font-weight: 600; }
+.seo-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font: 600 11px var(--font-ui), sans-serif; color: #fff; white-space: nowrap; }
+.seo-chip-good { background: var(--pos); } .seo-chip-attention { background: var(--warn); } .seo-chip-missing { background: var(--neg); } .seo-chip-not_measured { background: var(--ink3); }
+.seo-fix { display: grid; gap: 10px; }
+.seo-fix pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 13px/1.55 var(--font-mono), monospace; padding: 12px; border-radius: 10px; background: var(--surface2); max-height: 260px; overflow: auto; }
+.seo-fix pre.new { background: var(--accent-soft); color: var(--ink); }
+.seo-site { display: flex; align-items: center; gap: 16px; padding: 16px 18px; flex-wrap: wrap; }
+.seo-mini { display: flex; gap: 8px; }
+.seo-mini span { min-width: 54px; text-align: center; padding: 6px 8px; border-radius: 10px; background: var(--surface2); font-size: 12px; }
+.seo-mini b { display: block; font-size: 18px; font-weight: 600; }
+@media (max-width: 640px) { .seo-rings { grid-template-columns: 1fr; } }
