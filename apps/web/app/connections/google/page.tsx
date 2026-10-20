@@ -4,6 +4,7 @@ import { googleAccessToken } from "@/lib/google-token";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { disconnect } from "../connection-actions";
 import { saveAndSyncGoogle } from "./actions";
 
 export default async function GoogleAccounts({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -57,6 +58,16 @@ export default async function GoogleAccounts({ searchParams }: { searchParams: P
           <Button asChild variant="outline"><Link href="/connections">Back</Link></Button>
         </div>
       </form>
+
+      <Card style={{ borderColor: "var(--neg)" }}>
+        <b>Disconnect Google Ads</b>
+        <p className="sub" style={{ fontSize: 13 }}>Deletes the stored login and every account, campaign and metric imported from Google Ads. We also ask Google Ads to revoke access. You can reconnect later.</p>
+        <form action={disconnect} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="platform" value="google" />
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}><input type="checkbox" name="confirm" value="yes" required /> I understand this deletes my Google Ads data in acezilla</label>
+          <Button variant="outline" style={{ color: "var(--neg)" }}>Disconnect</Button>
+        </form>
+      </Card>
     </>
   );
 }

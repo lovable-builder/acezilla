@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { disconnect } from "../connection-actions";
 import { saveAndSync } from "./actions";
 
 const STATUS: Record<number, string> = { 1: "Active", 2: "Disabled", 3: "Unsettled", 7: "In review", 9: "Grace period", 100: "Closing", 101: "Closed" };
@@ -61,6 +62,16 @@ export default async function MetaAccounts({ searchParams }: { searchParams: Pro
           <Button asChild variant="outline"><Link href="/connections">Back</Link></Button>
         </div>
       </form>
+
+      <Card style={{ borderColor: "var(--neg)" }}>
+        <b>Disconnect Meta</b>
+        <p className="sub" style={{ fontSize: 13 }}>Deletes the stored login and every account, campaign and metric imported from Meta. We also ask Meta to revoke access. You can reconnect later.</p>
+        <form action={disconnect} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="platform" value="meta" />
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}><input type="checkbox" name="confirm" value="yes" required /> I understand this deletes my Meta data in acezilla</label>
+          <Button variant="outline" style={{ color: "var(--neg)" }}>Disconnect</Button>
+        </form>
+      </Card>
     </>
   );
 }

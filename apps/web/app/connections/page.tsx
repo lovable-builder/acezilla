@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BrandLogo } from "@/components/brand/logo";
 import { ago } from "@/lib/format";
+import { syncNow } from "./connection-actions";
 
 const STEPS = ["Workspace", "Connect accounts", "Goals & KPIs", "Historical import"];
 const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
@@ -13,7 +14,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const { supabase, current } = await getWorkspaceContext();
   const [{ data: conns }, { data: accts }] = current
     ? await Promise.all([
-        supabase.from("connection").select("platform,last_sync_at").eq("workspace_id", current.id),
+        supabase.from("connection").select("platform,last_sync_at,status,last_error,token_expires_at").eq("workspace_id", current.id),
         supabase.from("ad_account").select("platform,name").eq("workspace_id", current.id).order("name"),
       ])
     : [{ data: [] }, { data: [] }];
@@ -37,22 +38,35 @@ export default async function Connections({ searchParams }: { searchParams: Prom
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 24, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <Connector
-            logo={<BrandLogo brand="meta" />} name="Meta Ads" desc="Facebook and Instagram campaigns"
-            connected={!!conn("meta")} lastSync={conn("meta")?.last_sync_at as string | undefined} accounts={names("meta")}
-            action={conn("meta")
-              ? <Button asChild variant="outline"><Link href="/connections/meta">Edit accounts</Link></Button>
-              : metaReady ? <Button asChild><a href="/api/connect/meta/start">Connect Meta</a></Button>
-              : <Button variant="outline" disabled title="Add the Meta secrets">Not configured</Button>}
-          />
-          <Connector
-            logo={<BrandLogo brand="google" />} name="Google Ads" desc="Search, Shopping and Performance Max"
-            connected={!!conn("google")} lastSync={conn("google")?.last_sync_at as string | undefined} accounts={names("google")}
-            action={conn("google")
-              ? <Button asChild variant="outline"><Link href="/connections/google">Edit accounts</Link></Button>
-              : googleReady ? <Button asChild><a href="/api/connect/google/start">Connect Google</a></Button>
-              : <Button variant="outline" disabled title="Add the Google secrets">Not configured</Button>}
-          />
+          {(["meta", "google"] as const).map((id) => {
+            const c = conn(id);
+            const ready = id === "meta" ? metaReady : googleReady;
+            const label = id === "meta" ? "Meta" : "Google";
+            const daysLeft = c?.token_expires_at ? Math.floor((new Date(c.token_expires_at as string).getTime() - Date.now()) / 86400000) : null;
+            const broken = c && (c.status === "error" || c.status === "needs_reauth");
+            return (
+              <Connector
+                key={id}
+                logo={<BrandLogo brand={id} />}
+                name={id === "meta" ? "Meta Ads" : "Google Ads"}
+                desc={id === "meta" ? "Facebook and Instagram campaigns" : "Search, Shopping and Performance Max"}
+                connected={!!c} lastSync={c?.last_sync_at as string | undefined} accounts={names(id)}
+                problem={broken ? (c.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : `Sync failed: ${c.last_error ?? "unknown error"}`) : undefined}
+                warning={!broken && daysLeft !== null && daysLeft <= 10 ? `Login expires in ${Math.max(daysLeft, 0)} day${daysLeft === 1 ? "" : "s"}. Reconnect to renew.` : undefined}
+                action={
+                  c ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {c.status === "needs_reauth" || (daysLeft !== null && daysLeft <= 10)
+                        ? <Button asChild><a href={`/api/connect/${id}/start`}>Reconnect</a></Button> : null}
+                      <form action={syncNow}><input type="hidden" name="platform" value={id} /><Button variant="ghost">Sync now</Button></form>
+                      <Button asChild variant="outline"><Link href={`/connections/${id}`}>Edit accounts</Link></Button>
+                    </div>
+                  ) : ready ? <Button asChild><a href={`/api/connect/${id}/start`}>Connect {label}</a></Button>
+                  : <Button variant="outline" disabled title={`Add the ${label} secrets`}>Not configured</Button>
+                }
+              />
+            );
+          })}
           <Connector
             logo={<BrandLogo brand="tiktok" />} name="TikTok Ads" desc="Campaigns, spend and creative metrics"
             connected={false} action={<Button variant="outline" disabled title="Waiting for TikTok to approve our app">Pending approval</Button>}
@@ -86,21 +100,21 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   );
 }
 
-function Connector({ logo, name, desc, connected, lastSync, accounts = [], action }: {
-  logo: React.ReactNode; name: string; desc: string; connected: boolean; lastSync?: string; accounts?: string[]; action: React.ReactNode;
+function Connector({ logo, name, desc, connected, lastSync, accounts = [], action, problem, warning }: {
+  logo: React.ReactNode; name: string; desc: string; connected: boolean; lastSync?: string; accounts?: string[]; action: React.ReactNode; problem?: string; warning?: string;
 }) {
   return (
     <Card
       className="conn"
-      style={{ flexWrap: "wrap", ...(connected ? { borderColor: "var(--pos)", background: CONNECTED_BG } : {}) }}
+      style={{ flexWrap: "wrap", ...(connected ? { borderColor: problem ? "var(--neg)" : "var(--pos)", background: problem ? "color-mix(in oklab, var(--neg) 6%, var(--surface))" : CONNECTED_BG } : {}) }}
     >
       {logo}
       <div style={{ flex: 1, minWidth: 180 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <b>{name}</b>
           {connected && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--pos)", fontSize: 12, fontWeight: 600 }}>
-              <span style={{ width: 7, height: 7, borderRadius: 4, background: "var(--pos)" }} />Connected
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: problem ? "var(--neg)" : "var(--pos)", fontSize: 12, fontWeight: 600 }}>
+              <span style={{ width: 7, height: 7, borderRadius: 4, background: problem ? "var(--neg)" : "var(--pos)" }} />{problem ? "Needs attention" : "Connected"}
             </span>
           )}
         </div>
@@ -111,6 +125,8 @@ function Connector({ logo, name, desc, connected, lastSync, accounts = [], actio
               : lastSync ? `Synced ${ago(lastSync)}` : "No accounts selected yet. Click Edit accounts."
             : desc}
         </div>
+        {problem && <div style={{ fontSize: 13, color: "var(--neg)", marginTop: 2 }}>{problem}</div>}
+        {warning && <div style={{ fontSize: 13, color: "var(--warn)", marginTop: 2 }}>{warning}</div>}
       </div>
       {action}
     </Card>

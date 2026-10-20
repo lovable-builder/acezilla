@@ -87,3 +87,8 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.t th { text-align: right; font: 500 11px var(--font-mono), monospace; color: var(--ink3); text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 table.t td { text-align: right; padding: 10px; border-bottom: 1px solid var(--line); }
 table.t th:first-child, table.t td:first-child { text-align: left; }
+
+.legal { font-size: 15px; line-height: 1.7; color: var(--ink2); display: flex; flex-direction: column; gap: 10px; }
+.legal h2 { font-size: 18px; font-weight: 600; color: var(--ink); margin: 18px 0 0; letter-spacing: -0.02em; }
+.legal ul { padding-left: 20px; list-style: disc; display: flex; flex-direction: column; gap: 4px; }
+.legal a { color: var(--accent-ink); text-decoration: underline; }
