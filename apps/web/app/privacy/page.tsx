@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Contact, LegalDoc } from "@/components/legal/doc";
 import { COMPANY, EFFECTIVE } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Privacy Policy · acezilla", alternates: { canonical: "/privacy" } };
+export const metadata: Metadata = { title: "Privacy Policy · acezilla", description: "What acezilla collects, why, how long it keeps it and how to delete it. Read-only access to your ad accounts, encrypted logins, and no selling of your data.", alternates: { canonical: "/privacy" } };
 
 export default function Privacy() {
   return (

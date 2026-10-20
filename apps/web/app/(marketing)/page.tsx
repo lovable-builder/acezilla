@@ -13,8 +13,8 @@ import team from "./assets/team.jpg";
 import desk from "./assets/desk.jpg";
 import "./landing.css";
 
-const TITLE = "acezilla — your AI marketing agency for Meta, Google and TikTok";
-const DESC = "One workspace to plan, buy and understand paid media. See what is really working across platforms, and let AI prepare the next move. Nothing changes in a live campaign until you approve it.";
+const TITLE = "acezilla — AI marketing agency for Meta, Google and TikTok";
+const DESC = "Plan, buy and understand paid media in one workspace. See what really works across Meta, Google and TikTok, then approve AI-prepared changes.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
@@ -114,6 +114,12 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ---------- definition (a short direct answer for search and AI engines) ---------- */}
+      <section className="lp-wrap lp-define">
+        <h2>What is acezilla?</h2>
+        <p>acezilla is an AI marketing workspace that connects your Meta, Google and TikTok ad accounts and your store. It shows what is really working in one place, flags problems early, and prepares suggested changes as drafts that you approve before anything goes live.</p>
+      </section>
+
       {/* ---------- problem / value ---------- */}
       <section className="lp-section">
         <div className="lp-wrap lp-split">
@@ -210,7 +216,7 @@ export default function Landing() {
           <Reveal className="lp-head"><p className="lp-kicker mono">FAQ</p><h2>Questions, answered straight.</h2></Reveal>
           <div>
             {FAQ.map((f) => (
-              <details key={f.q}><summary>{f.q}</summary><p>{f.a}</p></details>
+              <details key={f.q}><summary><h3>{f.q}</h3></summary><p>{f.a}</p></details>
             ))}
           </div>
         </div>

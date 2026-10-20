@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Contact, LegalDoc } from "@/components/legal/doc";
 import { EFFECTIVE } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Data deletion · acezilla", alternates: { canonical: "/data-deletion" } };
+export const metadata: Metadata = { title: "Data deletion · acezilla", description: "Disconnect a platform to delete its data instantly, revoke acezilla in Meta, Google or TikTok, or ask us to delete your whole acezilla account.", alternates: { canonical: "/data-deletion" } };
 
 export default function DataDeletion() {
   return (
