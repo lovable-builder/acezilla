@@ -30,11 +30,11 @@ export default async function CommandCenter() {
         <div>
           <div className="eyebrow">Overview</div>
           <h1 className="page">Command center</h1>
-          <p className="sub">Load demo data or import a CSV to get your first briefing.</p>
+          <p className="sub">Connect an ad account to get your first briefing.</p>
         </div>
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span>Nothing synced yet.</span>
-          <Button asChild><Link href="/connections">Bring in data</Link></Button>
+          <Button asChild><Link href="/connections">Connect an account</Link></Button>
         </Card>
       </>
     );

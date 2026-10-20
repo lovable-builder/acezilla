@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { loadDemoData, importCsv, clearDemoData } from "@/app/actions";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,14 +21,13 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const names = (p: string) => (accts ?? []).filter((a) => a.platform === p).map((a) => a.name as string);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const mock = conn("mock"), csv = conn("csv");
 
   return (
     <>
       <div>
         <div className="eyebrow">Step 2 of 4 · Connect accounts</div>
         <h1 className="page">Bring in your ad data</h1>
-        <p className="sub">Connect your ad platforms, or start with demo data or your own CSV export. Everything is read-only.</p>
+        <p className="sub">Connect your ad platforms. Everything is read-only.</p>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
         {STEPS.map((s, i) => <div key={s} title={s} style={{ height: 3, borderRadius: 2, background: i < 2 ? "var(--accent)" : "var(--line2)" }} />)}
@@ -66,28 +64,6 @@ export default async function Connections({ searchParams }: { searchParams: Prom
           <Connector
             logo={<BrandLogo brand="ga4" />} name="Google Analytics 4" desc="Sessions and on-site conversions"
             connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
-          />
-
-          <div className="eyebrow" style={{ marginTop: 8 }}>No ad account yet?</div>
-          <Connector
-            logo={<Tile letter="D" color="var(--accent)" />} name="Demo data" desc="60 days across TikTok, Meta and Google, plus store orders."
-            connected={!!mock} lastSync={mock?.last_sync_at as string | undefined}
-            action={
-              <div style={{ display: "flex", gap: 8 }}>
-                <form action={loadDemoData}><Button variant={mock ? "outline" : "solid"}>{mock ? "Reload" : "Load demo data"}</Button></form>
-                {mock && <form action={clearDemoData}><Button variant="ghost">Remove</Button></form>}
-              </div>
-            }
-          />
-          <Connector
-            logo={<Tile letter="C" color="var(--ink2)" />} name="CSV import" desc="Columns: date, platform, campaign, spend (+ impressions, clicks, conversions, revenue)."
-            connected={!!csv} lastSync={csv?.last_sync_at as string | undefined}
-            action={
-              <form action={importCsv} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input type="file" name="file" accept=".csv,text/csv" required className="text-xs" style={{ maxWidth: 170 }} />
-                <Button variant="outline">Import</Button>
-              </form>
-            }
           />
         </div>
 
@@ -139,8 +115,4 @@ function Connector({ logo, name, desc, connected, lastSync, accounts = [], actio
       {action}
     </Card>
   );
-}
-
-function Tile({ letter, color }: { letter: string; color: string }) {
-  return <div style={{ width: 44, height: 44, borderRadius: 10, background: color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
 }
