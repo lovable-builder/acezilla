@@ -1,11 +1,12 @@
 import "server-only";
 import {
   fetchGoogleDataset, fetchMetaDataset, GoogleApiError, listGoogleAdAccounts, listMetaAdAccounts, MetaApiError,
-  refreshGoogleAccessToken,
+  refreshGoogleAccessToken, AllegroApiError,
 } from "@acezilla/connectors";
 import { decryptToken } from "@/lib/crypto";
 import { alertIfNeeded } from "@/lib/alerts";
 import { ingestDataset } from "@/lib/ingest";
+import { syncAllegro } from "@/lib/allegro";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -21,6 +22,7 @@ const PREFIX: Record<string, string> = { meta: "meta-acct-", google: "google-acc
 export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DAYS): Promise<SyncResult> {
   try {
     if (!conn.token_enc) throw new Error("Not connected");
+    if (conn.platform === "allegro") { const a = await syncAllegro(admin, conn, days); return { ok: true, campaigns: a.campaigns, rows: a.rows }; }
     const prefix = PREFIX[conn.platform];
     if (!prefix) throw new Error(`Unsupported platform ${conn.platform}`);
     const { data: rows } = await admin.from("ad_account").select("external_id").eq("connection_id", conn.id);
@@ -46,7 +48,7 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
     return { ok: true, campaigns: r.campaigns, rows: r.insights };
   } catch (e) {
     const error = e instanceof Error ? e.message : "Sync failed";
-    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof GoogleApiError && /invalid_grant/i.test(error));
+    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof GoogleApiError && /invalid_grant/i.test(error)) || (e instanceof AllegroApiError && e.needsReauth);
     await admin.from("connection").update({ status: needsReauth ? "needs_reauth" : "error", last_error: error.slice(0, 300) }).eq("id", conn.id);
     return { ok: false, error, needsReauth };
   }
@@ -55,7 +57,7 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
 /** Every live Meta/Google connection, one after another, within a time budget. */
 export async function syncAll(admin: Admin, budgetMs = 240_000) {
   const started = Date.now();
-  const { data } = await admin.from("connection").select("id,workspace_id,platform,token_enc,status").in("platform", ["meta", "google"]).neq("status", "needs_reauth");
+  const { data } = await admin.from("connection").select("id,workspace_id,platform,token_enc,status").in("platform", ["meta", "google", "allegro"]).neq("status", "needs_reauth");
   const results: { platform: string; ok: boolean; rows?: number; error?: string }[] = [];
   let skipped = 0;
   for (const c of data ?? []) {

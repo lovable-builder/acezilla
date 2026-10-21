@@ -13,4 +13,5 @@ export const PLATFORM = {
   tiktok: { label: "TikTok", color: "var(--tt)" },
   meta: { label: "Meta", color: "var(--me)" },
   google: { label: "Google", color: "var(--go)" },
+  allegro: { label: "Allegro", color: "var(--ink2)" },
 } as Record<string, { label: string; color: string }>;

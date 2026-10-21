@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseWooPush, verifyWooSignature } from "@acezilla/connectors";
 import { decryptToken } from "@/lib/crypto";
+import { alignCurrency } from "@/lib/currency";
 import { ingestOrders } from "@/lib/ingest";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -41,17 +42,7 @@ export async function POST(req: Request) {
   type Stats = { plugin_version?: string; last_orders_at?: string; skipped_orders?: Record<string, string> };
   const stats = ((conn.stats as Stats | null) ?? {}) as Stats;
 
-  /** A store in another currency than the workspace: if no ad account exists yet there is nothing to mismatch, so just adopt the store's currency. */
-  const currencyWarning = async (storeCurrency: string | null) => {
-    if (!storeCurrency) return null;
-    const store = storeCurrency.toUpperCase();
-    const { data: w } = await admin.from("workspace").select("currency").eq("id", ws).single();
-    const wsCur = (w?.currency as string | undefined)?.toUpperCase();
-    if (!wsCur || wsCur === store) return null;
-    const { count } = await admin.from("ad_account").select("id", { count: "exact", head: true }).eq("workspace_id", ws);
-    if (!count) { await admin.from("workspace").update({ currency: store }).eq("id", ws); return null; }
-    return `Your store sells in ${store} but this workspace uses ${wsCur}. Revenue is not converted, so ROAS would be off.`;
-  };
+  const currencyWarning = (storeCurrency: string | null) => alignCurrency(admin, ws, storeCurrency);
 
   if (push.type === "ping") {
     const warning = await currencyWarning(push.info.currency);

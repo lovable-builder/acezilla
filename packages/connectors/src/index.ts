@@ -6,3 +6,4 @@ export * from "./csv";
 export * from "./meta";
 export * from "./google";
 export * from "./woocommerce";
+export * from "./allegro";

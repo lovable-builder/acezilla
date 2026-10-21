@@ -26,7 +26,7 @@ export function decideAlert(c: ConnState, now: Date = new Date()): { send: Alert
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-export const platformLabel = (p: string) => (p === "meta" ? "Meta Ads" : p === "google" ? "Google Ads" : p === "tiktok" ? "TikTok Ads" : p === "woocommerce" ? "WooCommerce" : p);
+export const platformLabel = (p: string) => (p === "meta" ? "Meta Ads" : p === "google" ? "Google Ads" : p === "tiktok" ? "TikTok Ads" : p === "woocommerce" ? "WooCommerce" : p === "allegro" ? "Allegro" : p);
 
 export function renderAlertEmail(kind: AlertKind, o: { platform: string; detail?: string | null; tokenExpiresAt?: string | null; url: string; now?: Date }) {
   const name = platformLabel(o.platform);

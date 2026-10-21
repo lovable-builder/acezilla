@@ -1,4 +1,4 @@
-export type Platform = "tiktok" | "meta" | "google" | "shopify" | "woocommerce" | "csv" | "mock";
+export type Platform = "tiktok" | "meta" | "google" | "shopify" | "woocommerce" | "allegro" | "csv" | "mock";
 
 export interface AdAccount { externalId: string; name: string; currency: string; }
 

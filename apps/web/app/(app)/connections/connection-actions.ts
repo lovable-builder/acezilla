@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revokeAtPlatform, syncConnection, type ConnRow } from "@/lib/sync";
 import { requireWriter } from "@/lib/workspace";
 
-const PLATFORMS = ["meta", "google", "woocommerce"];
-const LABEL: Record<string, string> = { meta: "Meta", google: "Google Ads", woocommerce: "WooCommerce" };
+const PLATFORMS = ["meta", "google", "woocommerce", "allegro"];
+const LABEL: Record<string, string> = { meta: "Meta", google: "Google Ads", woocommerce: "WooCommerce", allegro: "Allegro" };
 const go = (qs: string) => redirect(`/connections?${qs}`);
 
 async function load(platform: string) {
@@ -43,12 +43,17 @@ export async function disconnect(formData: FormData) {
       const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "woo:%");
       if (eo) throw new Error(eo.message);
     }
+    if (conn.platform === "allegro") {
+      const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "allegro:%");
+      if (eo) throw new Error(eo.message);
+      await admin.from("offer_stats_snapshots").delete().eq("workspace_id", conn.workspace_id).eq("platform", "allegro");
+    }
     // ad_account -> campaign -> ad_group -> ad -> insight_daily all cascade.
     const { error: e1 } = await admin.from("ad_account").delete().eq("connection_id", conn.id);
     if (e1) throw new Error(e1.message);
     const { error: e2 } = await admin.from("connection").delete().eq("id", conn.id);
     if (e2) throw new Error(e2.message);
-    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${conn.platform === "woocommerce" ? " You can also deactivate the acezilla plugin in WordPress." : ""}`)}`;
+    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${conn.platform === "woocommerce" ? " You can also deactivate the acezilla plugin in WordPress." : conn.platform === "allegro" ? " You can also remove acezilla under the connected apps in your Allegro account settings." : ""}`)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not disconnect")}`;
   }

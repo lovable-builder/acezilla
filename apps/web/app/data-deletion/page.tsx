@@ -12,7 +12,7 @@ export default function DataDeletion() {
       <h2>1. Disconnect a platform (instant)</h2>
       <ol style={{ paddingLeft: 20, listStyle: "decimal" }}>
         <li>Sign in to acezilla and open <b>Connections</b>.</li>
-        <li>On the platform card (Meta Ads or Google Ads), click <b>Edit accounts</b>. For WooCommerce, tick <b>Delete imported orders</b> on its card.</li>
+        <li>On the platform card (Meta Ads or Google Ads), click <b>Edit accounts</b>. For WooCommerce or Allegro, open its page and use <b>Disconnect</b>.</li>
         <li>At the bottom, tick the confirmation box and click <b>Disconnect</b>.</li>
       </ol>
       <p>This immediately deletes the stored login and every ad account, campaign, metric and order imported from that platform, and asks the platform to revoke our access (for WooCommerce, also deactivate the acezilla plugin in WordPress).</p>
@@ -21,6 +21,7 @@ export default function DataDeletion() {
       <ul>
         <li><b>Meta (Facebook / Instagram):</b> Settings → Business Integrations (or Apps and Websites) → find acezilla → Remove. Removing it also lets you ask Meta to delete data it shared with the app.</li>
         <li><b>Google:</b> <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> → acezilla → Remove access.</li>
+        <li><b>Allegro:</b> your Allegro account settings → connected applications → remove acezilla.</li>
         <li><b>WooCommerce:</b> WordPress → Plugins → deactivate and delete "acezilla for WooCommerce", or click Disconnect under WooCommerce → acezilla.</li>
         <li><b>TikTok:</b> TikTok for Business → Account settings → Authorized apps → remove acezilla.</li>
       </ul>

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { BrandLogo } from "@/components/brand/logo";
 import { ago } from "@/lib/format";
 import { syncNow } from "./connection-actions";
+import { allegroEnv } from "@/lib/allegro";
 
 const STEPS = ["Workspace", "Connect accounts", "Goals & KPIs", "Historical import"];
 const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
@@ -22,6 +23,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const names = (p: string) => (accts ?? []).filter((a) => a.platform === p).map((a) => a.name as string);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
   const woo = conn("woocommerce");
+  const allegro = conn("allegro");
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   return (
@@ -77,6 +79,22 @@ export default async function Connections({ searchParams }: { searchParams: Prom
             connected={!!woo} lastSync={woo?.last_sync_at as string | undefined} accounts={woo?.external_user_id ? [woo.external_user_id as string] : []}
             warning={woo?.last_error ? (woo.last_error as string) : undefined}
             action={<Button asChild variant={woo ? "outline" : "solid"}><Link href="/connections/woocommerce">{woo ? ((woo.last_error as string | null)?.startsWith("Your store sells in") ? "Fix currency" : "Manage") : "Set up"}</Link></Button>}
+          />
+          <Connector
+            logo={<BrandLogo brand="allegro" />} name="Allegro" desc="Orders, ad costs and fees from your Allegro seller account"
+            connected={!!allegro} lastSync={allegro?.last_sync_at as string | undefined} accounts={allegro?.external_user_id ? [allegro.external_user_id as string] : []}
+            problem={allegro?.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : allegro?.status === "error" ? `Sync failed: ${allegro.last_error ?? "unknown error"}` : undefined}
+            warning={allegro && allegro.status === "active" && allegro.last_error ? (allegro.last_error as string) : undefined}
+            action={
+              allegro ? (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {allegro.status === "needs_reauth" ? <Button asChild><a href="/api/connect/allegro/start">Reconnect</a></Button> : null}
+                  <form action={syncNow}><input type="hidden" name="platform" value="allegro" /><Button variant="ghost">Sync now</Button></form>
+                  <Button asChild variant="outline"><Link href="/connections/allegro">Details</Link></Button>
+                </div>
+              ) : allegroEnv().ready ? <Button asChild><a href="/api/connect/allegro/start">Connect Allegro</a></Button>
+              : <Button variant="outline" disabled title="Add the Allegro client ID and secret">Not configured</Button>
+            }
           />
           <Connector
             logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for modeled ROAS"
