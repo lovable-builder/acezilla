@@ -1,8 +1,9 @@
 import "server-only";
 import { buildFixPrompt, FIX_SYSTEM, planFixTargets, validateFixes, type DraftedFix, type PageData } from "@acezilla/seo";
 
-const ENDPOINT = "https://api.deepseek.com/chat/completions";
-const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+/** Google Gemini API (generateContent). The model is configurable; the alias follows Google's current Flash model. */
+const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+const endpoint = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
 export type FixResult = { ok: true; fixes: DraftedFix[]; planned: number } | { ok: false; reason: string };
 
@@ -14,26 +15,29 @@ export type FixResult = { ok: true; fixes: DraftedFix[]; planned: number } | { o
 export async function draftFixes(pages: PageData[], fetchImpl: typeof fetch = fetch): Promise<FixResult> {
   const targets = planFixTargets(pages);
   if (targets.length === 0) return { ok: true, fixes: [], planned: 0 };
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) return { ok: false, reason: "DEEPSEEK_API_KEY is not set" };
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return { ok: false, reason: "GEMINI_API_KEY is not set" };
   try {
-    const res = await fetchImpl(ENDPOINT, {
+    const res = await fetchImpl(endpoint(MODEL), {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        model: MODEL, max_tokens: 4000, temperature: 0.3, response_format: { type: "json_object" },
-        messages: [{ role: "system", content: FIX_SYSTEM }, { role: "user", content: buildFixPrompt(targets) }],
+        systemInstruction: { parts: [{ text: FIX_SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text: buildFixPrompt(targets) }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 4000 },
       }),
       signal: AbortSignal.timeout(90_000),
     });
-    if (!res.ok) return { ok: false, reason: `DeepSeek API ${res.status}` };
-    const body = (await res.json()) as { choices?: { message?: { content?: string }; finish_reason?: string }[] };
-    const choice = body.choices?.[0];
-    if (!choice?.message?.content || choice.finish_reason === "length") return { ok: false, reason: "No usable output" };
+    if (!res.ok) return { ok: false, reason: `Gemini API ${res.status}` };
+    const body = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; promptFeedback?: { blockReason?: string } };
+    if (body.promptFeedback?.blockReason) return { ok: false, reason: "Gemini declined to draft fixes for this site" };
+    const c = body.candidates?.[0];
+    const text = c?.content?.parts?.map((p) => p.text ?? "").join("");
+    if (!text || c?.finishReason === "MAX_TOKENS") return { ok: false, reason: "No usable output" };
     let raw: unknown;
-    try { raw = JSON.parse(choice.message.content); } catch { return { ok: false, reason: "Output was not valid JSON" }; }
+    try { raw = JSON.parse(text); } catch { return { ok: false, reason: "Output was not valid JSON" }; }
     return { ok: true, fixes: validateFixes(targets, raw), planned: targets.length };
   } catch (e) {
-    return { ok: false, reason: e instanceof Error && e.name === "TimeoutError" ? "DeepSeek timed out" : "Drafting failed" };
+    return { ok: false, reason: e instanceof Error && e.name === "TimeoutError" ? "Gemini timed out" : "Drafting failed" };
   }
 }
