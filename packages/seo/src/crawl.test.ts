@@ -78,3 +78,18 @@ test("a private redirect target is not reported as a broken link and never fetch
   assert.ok(r.ok && !(r.broken ?? []).some((b) => b.url.includes("jump")));
   assert.ok(!calls.some((c) => c.includes("169.254")));
 });
+
+test("two links that redirect to the same page are saved once", async () => {
+  const { f } = site({
+    "https://a.com/": () => page(["/cart", "/cart?ref=1", "/about"]),
+    "https://a.com/cart": () => new Response("", { status: 301, headers: { location: "https://a.com/cart/" } }),
+    "https://a.com/cart?ref=1": () => new Response("", { status: 301, headers: { location: "https://a.com/cart/" } }),
+    "https://a.com/cart/": () => page([], "Cart"),
+    "https://a.com/about": () => page([], "About"),
+  });
+  const r = await crawlSite("https://a.com/", { fetch: f, lookup: pub, delayMs: 0 });
+  assert.ok(r.ok);
+  const urls = r.pages.map((p) => p.url);
+  assert.equal(new Set(urls).size, urls.length, `duplicate pages: ${urls.join(", ")}`);
+  assert.equal(urls.filter((u) => u.includes("/cart")).length, 1);
+});

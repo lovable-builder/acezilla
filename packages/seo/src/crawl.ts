@@ -54,6 +54,8 @@ export async function crawlSite(startUrl: string, o: CrawlOptions = {}): Promise
   sitemapPages.forEach(enqueue);
   const pages: PageData[] = [];
   let skipped = 0, started = 0;
+  // Final addresses already saved: two links can redirect to the same page, which must be counted once.
+  const saved = new Set<string>([homeKey]);
   const fetched = new Set<string>([homeKey]), failures = new Map<string, number | null>();
   const homeData = analyzePage(home.body, { url: home.url, status: home.status, ms: home.ms, headers: home.headers });
   pages.push(homeData); started++; queue.shift();
@@ -70,6 +72,10 @@ export async function crawlSite(startUrl: string, o: CrawlOptions = {}): Promise
       const r = await safeFetch(next, { ...fetchOpts, requireHtml: true });
       if (r.ok ? r.status >= 400 : !r.unsafe && (r.status === undefined || r.status >= 400)) failures.set(next, r.ok ? r.status : r.status ?? null);
       if (r.ok && r.status < 400) {
+        const finalKey = normUrl(r.url);
+        fetched.add(finalKey);
+        if (saved.has(finalKey)) continue;
+        saved.add(finalKey);
         const d = analyzePage(r.body, { url: r.url, status: r.status, ms: r.ms, headers: r.headers });
         pages.push(d); d.internalLinks.forEach(enqueue); o.onProgress?.(pages.length, Math.min(maxPages, seen.size));
       }

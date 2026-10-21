@@ -41,7 +41,7 @@ export default async function SiteReport({ params, searchParams }: { params: Pro
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, null];
   const report = (shown?.report ?? null) as AuditReport | null;
-  const pageList = (pageRows ?? []).map((r) => ({ ...(r.data as PageData), url: r.url as string })).map((p) => ({ p, issues: pageIssues(p) }));
+  const pageList = [...new Map((pageRows ?? []).map((r) => [r.url as string, { ...(r.data as PageData), url: r.url as string }])).values()].map((p) => ({ p, issues: pageIssues(p) })); // one row per address, also for audits saved before duplicates were removed
   const shownPages = (pagesView === "issues" ? pageList.filter((x) => x.issues.length > 0) : pageList).sort((a, b) => b.issues.length - a.issues.length);
   let sec = 0;
   const num = () => String(++sec).padStart(2, "0");
