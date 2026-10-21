@@ -1,43 +1,14 @@
 import Link from "next/link";
-import { buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
+import { buildAttribution, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
+import { PeriodBar } from "@/components/dash/period-bar";
+import { parsePeriod } from "@/lib/period";
 import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
 
 const PAGE = 1000;
-const PRESETS = [7, 14, 30, 60, 90] as const;
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
-
-/** The period from the URL: a preset number of days ending at the latest data, or a custom from/to range (up to a year). */
-function parsePeriod(sp: { days?: string; from?: string; to?: string }) {
-  if (sp.from && sp.to && ISO.test(sp.from) && ISO.test(sp.to) && sp.from <= sp.to) {
-    const span = Math.round((Date.parse(`${sp.to}T00:00:00Z`) - Date.parse(`${sp.from}T00:00:00Z`)) / 86400000) + 1;
-    if (span >= 1 && span <= 366) return { windowDays: span, endDate: sp.to, custom: { from: sp.from, to: sp.to }, days: null as number | null };
-  }
-  const n = Number(sp.days);
-  const days = (PRESETS as readonly number[]).includes(n) ? n : 30;
-  return { windowDays: days, endDate: undefined as string | undefined, custom: null, days };
-}
-
-function PeriodBar({ active, custom }: { active: number | null; custom: { from: string; to: string } | null }) {
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <span className="eyebrow">Period</span>
-      {PRESETS.map((n) => (
-        <Link key={n} href={`/dashboard?days=${n}`} className={`nav-item${active === n ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>{n} days</Link>
-      ))}
-      <form action="/dashboard" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-        <input type="date" name="from" className="field" defaultValue={custom?.from} required aria-label="From" style={{ padding: "5px 8px" }} />
-        <span className="eyebrow">to</span>
-        <input type="date" name="to" className="field" defaultValue={custom?.to} required aria-label="To" style={{ padding: "5px 8px" }} />
-        <Button variant={custom ? "solid" : "outline"} size="sm">Apply</Button>
-      </form>
-    </div>
-  );
-}
-
 const tone = (good: boolean | null, dv: number | null) => dv === null || good === null ? "var(--ink3)" : (dv >= 0) === good ? "var(--pos)" : "var(--neg)";
 
 function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas }: { store: StoreSales; cur: string; spendByDate: Map<string, number> | null; adSpend: number | null; platformRoas: number | null }) {
@@ -135,7 +106,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     const store0 = buildStoreSales(orderRows, { windowDays: period.windowDays, endDate: period.endDate });
     return (
       <>
-        <PeriodBar active={period.days} custom={period.custom} />
+        <PeriodBar path="/dashboard" active={period.days} custom={period.custom} />
         <div>
           <div className="eyebrow">Overview · last {store0.windowDays} days to {store0.endDate}</div>
           <h1 className="page">Your store made {money(store0.revenue.value, cur0)} from {int(store0.orders.value)} order{store0.orders.value === 1 ? "" : "s"}.</h1>
@@ -182,11 +153,14 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     { label: "Conversions", v: int(k.conversions.value), d: k.conversions.deltaPct, good: true, s: k.conversions.series },
   ];
 
+  const winStart = shiftDate(d.endDate, -(d.windowDays - 1));
+  const inWindow = orderRows.filter((x) => x.createdAt.slice(0, 10) >= winStart && x.createdAt.slice(0, 10) <= d.endDate);
+  const attr = buildAttribution({ platforms: d.platforms, campaigns: d.campaigns, orders: inWindow, nonReporting: ["allegro"] });
   const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] });
 
   return (
     <>
-      <PeriodBar active={period.days} custom={period.custom} />
+      <PeriodBar path="/dashboard" active={period.days} custom={period.custom} />
       <div>
         <div className="eyebrow">Overview · last {d.windowDays} days to {d.endDate}</div>
         <h1 className="page">
@@ -275,7 +249,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
                 <td><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 8, background: PLATFORM[c.platform]?.color }} />{c.name}</td>
                 <td>{money(c.spend, cur)}</td>
                 <td style={{ color: "var(--ink3)" }}>{x(c.roas)}</td>
-                <td style={{ fontWeight: 600 }} title="Needs store orders matched (coming next phase)">—</td>
+                {(() => { const m = attr.campaigns.get(c.campaignId); return <td style={{ fontWeight: 600 }} title={m ? `${m.orders} store orders tagged with this campaign` : "No store orders are tagged with this campaign's name (utm_campaign)"}>{m?.modeledRoas == null ? "—" : x(m.modeledRoas)}</td>; })()}
                 <td>{c.cpa === null ? "—" : money(c.cpa, cur)}</td>
                 <td style={{ color: c.status === "active" ? "var(--pos)" : "var(--ink3)" }}>{c.status}</td>
               </tr>

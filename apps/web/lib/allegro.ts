@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  AllegroApiError, buildAllegroDataset, decodeAllegroJwt, loadAllegroFees, loadAllegroOffers, loadAllegroSales, refreshAllegroToken, salesToOrders, summarizeFees, ALLEGRO_ID_PREFIX,
+  AllegroApiError, buildAllegroDataset, chargesAreNegative, classifyFee, decodeAllegroJwt, feeCost, loadAllegroFees, loadAllegroOffers, loadAllegroSales, refreshAllegroToken, salesToOrders, summarizeFees, ALLEGRO_ID_PREFIX,
 } from "@acezilla/connectors";
 import { decryptToken, encryptToken } from "@/lib/crypto";
 import { alignCurrency } from "@/lib/currency";
@@ -67,6 +67,18 @@ export async function syncAllegro(admin: Admin, conn: { id: string; workspace_id
   const { data: stored } = await admin.from("order").select("external_id").eq("workspace_id", conn.workspace_id).like("external_id", `${ALLEGRO_ID_PREFIX}%`).gte("created_at", since);
   const stale = (stored ?? []).map((s) => s.external_id as string).filter((id) => !keep.has(id));
   for (let i = 0; i < stale.length; i += 200) await admin.from("order").delete().eq("workspace_id", conn.workspace_id).in("external_id", stale.slice(i, i + 200));
+
+  // Order lines and per-offer fees: the detail behind the profit table. Keys are stable across syncs, so re-reading never duplicates.
+  const seen = new Map<string, number>();
+  const lineRows = lines.map((l) => { const base = `${l.orderId}:${l.offerId}`, n = (seen.get(base) ?? 0) + 1; seen.set(base, n); return { workspace_id: conn.workspace_id, platform: "allegro", line_key: `${base}:${n}`, order_id: l.orderId, offer_id: l.offerId, name: l.name.slice(0, 200), qty: l.qty, unit_price: l.unitPrice, bought_at: l.at }; });
+  for (let i = 0; i < lineRows.length; i += 500) await admin.from("order_line").upsert(lineRows.slice(i, i + 500), { onConflict: "workspace_id,platform,line_key" });
+  const { data: storedLines } = await admin.from("order_line").select("line_key").eq("workspace_id", conn.workspace_id).eq("platform", "allegro").gte("bought_at", since);
+  const keepKeys = new Set(lineRows.map((r) => r.line_key));
+  const staleKeys = (storedLines ?? []).map((r) => r.line_key as string).filter((k) => !keepKeys.has(k));
+  for (let i = 0; i < staleKeys.length; i += 200) await admin.from("order_line").delete().eq("workspace_id", conn.workspace_id).eq("platform", "allegro").in("line_key", staleKeys.slice(i, i + 200));
+  const neg = chargesAreNegative(fees);
+  const feeRows = fees.filter((f) => f.at && classifyFee(f.typeId, f.typeName) !== "settlement").map((f) => ({ workspace_id: conn.workspace_id, platform: "allegro", entry_id: f.id, occurred_at: f.at, type_name: f.typeName.slice(0, 200), category: classifyFee(f.typeId, f.typeName), offer_id: f.offerId, amount: feeCost(f, neg) }));
+  for (let i = 0; i < feeRows.length; i += 500) await admin.from("marketplace_fee").upsert(feeRows.slice(i, i + 500), { onConflict: "workspace_id,platform,entry_id" });
 
   const day = new Date().toISOString().slice(0, 10);
   if (offers.length) await admin.from("offer_stats_snapshots").upsert(offers.map((o) => ({ workspace_id: conn.workspace_id, platform: "allegro", offer_id: o.offerId, day, name: o.name.slice(0, 200), price: o.price, visits: o.visits, watchers: o.watchers })), { onConflict: "workspace_id,platform,offer_id,day" });

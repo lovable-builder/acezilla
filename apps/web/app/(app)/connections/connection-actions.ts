@@ -46,7 +46,7 @@ export async function disconnect(formData: FormData) {
     if (conn.platform === "allegro") {
       const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "allegro:%");
       if (eo) throw new Error(eo.message);
-      await admin.from("offer_stats_snapshots").delete().eq("workspace_id", conn.workspace_id).eq("platform", "allegro");
+      for (const t of ["offer_stats_snapshots", "order_line", "marketplace_fee"]) await admin.from(t).delete().eq("workspace_id", conn.workspace_id).eq("platform", "allegro");
     }
     // ad_account -> campaign -> ad_group -> ad -> insight_daily all cascade.
     const { error: e1 } = await admin.from("ad_account").delete().eq("connection_id", conn.id);
