@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { parsePeriod } from "@/lib/period";
+import { ago } from "@/lib/format";
+import { generateWeeklySummary } from "./summary-actions";
 import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
 
 const PAGE = 1000;
@@ -156,6 +158,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const winStart = shiftDate(d.endDate, -(d.windowDays - 1));
   const inWindow = orderRows.filter((x) => x.createdAt.slice(0, 10) >= winStart && x.createdAt.slice(0, 10) <= d.endDate);
   const attr = buildAttribution({ platforms: d.platforms, campaigns: d.campaigns, orders: inWindow, nonReporting: ["allegro"] });
+  const { data: summaryRow } = await supabase.from("ai_summary").select("day,content").eq("workspace_id", current.id).eq("kind", "weekly").order("day", { ascending: false }).limit(1).maybeSingle();
+  const summary = summaryRow && Date.now() - new Date(`${summaryRow.day}T00:00:00Z`).getTime() < 8 * 86400000 ? (summaryRow.content as { headline?: string; highlights?: string[]; watch?: string[]; nextSteps?: string[]; unverified?: string[]; error?: string }) : null;
   const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] });
 
   return (
@@ -172,6 +176,25 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         <p className="sub">{store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
       </div>
       {warningCard}
+
+      <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+          <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Weekly summary</h2>
+          {summaryRow && <span className="eyebrow">written {ago(`${summaryRow.day}T12:00:00Z`)}</span>}
+          <form action={generateWeeklySummary} style={{ marginLeft: "auto" }}><Button variant="outline" size="sm">{summary && !summary.error ? "Rewrite" : "Write this week's summary"}</Button></form>
+        </div>
+        {summary?.error && <div style={{ color: "var(--neg)", fontSize: 13 }}>{summary.error}</div>}
+        {summary && !summary.error && summary.headline && (
+          <>
+            <b style={{ fontWeight: 600 }}>{summary.headline}</b>
+            <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>{(summary.highlights ?? []).map((h) => <li key={h}>{h}</li>)}</ul>
+            {(summary.watch ?? []).length > 0 && <div><div className="eyebrow" style={{ color: "var(--warn)" }}>Keep an eye on</div><ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{summary.watch!.map((h) => <li key={h}>{h}</li>)}</ul></div>}
+            {(summary.nextSteps ?? []).length > 0 && <div><div className="eyebrow">This week, try</div><ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{summary.nextSteps!.map((h) => <li key={h}>{h}</li>)}</ul></div>}
+            {(summary.unverified ?? []).length > 0 && <div style={{ fontSize: 12, color: "var(--warn)" }}>Check before relying on this: {summary.unverified!.join(", ")} could not be matched to your data.</div>}
+          </>
+        )}
+        {!summary && <div className="sub" style={{ margin: 0 }}>A short, plain-language summary of the last 7 days written from your numbers. It is written when you ask, so opening this page never costs anything.</div>}
+      </Card>
 
       <Card>
         <h2 className="h2"><span className="n">··</span>Insights</h2>

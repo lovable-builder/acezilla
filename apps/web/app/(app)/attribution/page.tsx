@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { buildAttribution, buildDashboard, buildOfferProfit, shiftDate, type DailyRow, type FeeRow, type LineRow, type OrderRow } from "@acezilla/models";
+import { buildAttribution, buildDashboard } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money, PLATFORM, x } from "@/lib/format";
 import { parsePeriod, periodQs, todayIso, windowStart } from "@/lib/period";
+import { loadAdRows, loadOfferProfit, loadOrders } from "@/lib/data";
 import { saveOfferCost, saveVatRate } from "./actions";
 
 export const metadata = { title: "Attribution · acezilla" };
 export const dynamic = "force-dynamic";
-const PAGE = 1000;
 const pct = (n: number | null, d = 0) => (n === null ? "—" : `${(n * 100).toFixed(d)}%`);
 const label = (p: string) => PLATFORM[p]?.label ?? p.replace(/^./, (c) => c.toUpperCase());
 
@@ -23,45 +23,18 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
   const cur = current.currency;
 
   // Ad data (what the platforms say)
-  const rows: DailyRow[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data } = await supabase.from("campaign_daily").select("*").eq("workspace_id", current.id).order("date", { ascending: false }).range(from, from + PAGE - 1);
-    for (const r of data ?? []) rows.push({ campaignId: r.campaign_id, campaignName: r.campaign_name, platform: r.platform, status: r.status, date: r.date, spend: Number(r.spend), impressions: Number(r.impressions), clicks: Number(r.clicks), conversions: Number(r.conversions), revenue: Number(r.revenue) });
-    if ((data?.length ?? 0) < PAGE) break;
-  }
+  const rows = await loadAdRows(supabase, current.id);
   const d = rows.length ? buildDashboard(rows, { windowDays: period.windowDays, endDate: period.endDate }) : null;
   const endDate = d?.endDate ?? period.endDate ?? todayIso();
   const start = windowStart(endDate, period.windowDays);
 
   // Store orders (what really sold)
-  const orders: OrderRow[] = [];
-  for (let from = 0; from < 30 * PAGE; from += PAGE) {
-    const { data } = await supabase.from("order").select("created_at,revenue,utm,click_ids,customer_id").eq("workspace_id", current.id).gte("created_at", `${start}T00:00:00Z`).order("created_at", { ascending: false }).range(from, from + PAGE - 1);
-    for (const r of data ?? []) if ((r.created_at as string).slice(0, 10) <= endDate) orders.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
-    if ((data?.length ?? 0) < PAGE) break;
-  }
+  const orders = await loadOrders(supabase, current.id, start, endDate);
   const attr = buildAttribution({ platforms: d?.platforms ?? [], campaigns: d?.campaigns ?? [], orders, nonReporting: ["allegro"] });
   const totalSales = orders.reduce((s, o) => s + o.revenue, 0);
 
   // Allegro offers (profit per offer)
-  const { data: allegroConn } = await supabase.from("connection").select("id").eq("workspace_id", current.id).eq("platform", "allegro").maybeSingle();
-  let profit: ReturnType<typeof buildOfferProfit> | null = null;
-  if (allegroConn) {
-    const [{ data: lines }, { data: fees }, { data: costs }, { data: setting }, { data: snaps }] = await Promise.all([
-      supabase.from("order_line").select("offer_id,name,qty,unit_price,bought_at").eq("workspace_id", current.id).eq("platform", "allegro").gte("bought_at", `${start}T00:00:00Z`).limit(20000),
-      supabase.from("marketplace_fee").select("category,offer_id,amount,occurred_at").eq("workspace_id", current.id).eq("platform", "allegro").gte("occurred_at", `${start}T00:00:00Z`).limit(20000),
-      supabase.from("offer_cost").select("offer_id,unit_cost").eq("workspace_id", current.id).eq("platform", "allegro"),
-      supabase.from("marketplace_setting").select("vat_rate").eq("workspace_id", current.id).maybeSingle(),
-      supabase.from("offer_stats_snapshots").select("offer_id,name").eq("workspace_id", current.id).eq("platform", "allegro").gte("day", shiftDate(todayIso(), -7)),
-    ]);
-    profit = buildOfferProfit({
-      from: start, to: endDate, vatRate: Number(setting?.vat_rate ?? 0),
-      lines: (lines ?? []).map((l) => ({ offerId: l.offer_id as string, name: (l.name as string | null) ?? null, qty: l.qty as number, unitPrice: Number(l.unit_price), boughtAt: l.bought_at as string })) as LineRow[],
-      fees: (fees ?? []).map((f) => ({ category: f.category as FeeRow["category"], offerId: (f.offer_id as string | null) ?? null, amount: Number(f.amount), occurredAt: f.occurred_at as string })),
-      costs: new Map((costs ?? []).map((c) => [c.offer_id as string, Number(c.unit_cost)])),
-      names: new Map((snaps ?? []).filter((s) => s.name).map((s) => [s.offer_id as string, s.name as string])),
-    });
-  }
+  const profit = await loadOfferProfit(supabase, current.id, start, endDate);
 
   const noData = orders.length === 0 && !d && !profit;
   return (

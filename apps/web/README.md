@@ -4,6 +4,17 @@
 
 The audit itself is rule-based. A language model only drafts wording for fix cards. Page text is untrusted: it is passed as delimited data, the model has no tools, the answer must match a declared JSON schema, and every card is validated before it is shown. Text on a page that tries to instruct the AI is **reported as a finding and ignored**.
 
+### What uses AI
+
+| Feature | Where | Notes |
+|---|---|---|
+| SEO fix cards | SEO site page | Drafts wording for issues the audit found |
+| Copilot | Copilot | Answers questions from a fixed snapshot of the workspace; figures it quotes are checked against that data |
+| Weekly summary | Command center | Written on request and cached for the day |
+| Campaign builder | Campaign builder | Suggest-only drafts; nothing is sent to an ad platform |
+
+All of them go through the provider below, have no tools, return JSON that is validated before use, and have daily limits per workspace (`apps/web/lib/ai-guard.ts`). Live checks: `scripts/llm-injection-test.mts` (SEO) and `scripts/ai-features-test.mts` (Copilot, summary, builder).
+
 ### Choosing the backend
 
 `LLM_PROVIDER` selects it. Default is `vertex`.
