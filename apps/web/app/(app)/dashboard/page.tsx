@@ -81,8 +81,17 @@ export default async function CommandCenter() {
     for (const r of data ?? []) orderRows.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
     if ((data?.length ?? 0) < PAGE) break;
   }
-  const { data: wooConn } = await supabase.from("connection").select("last_error").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
+  const { data: wooConn } = await supabase.from("connection").select("last_error,stats").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
   const currencyWarning = (wooConn?.last_error as string | null)?.startsWith("Your store sells in") ? (wooConn!.last_error as string) : null;
+  const skippedMap = ((wooConn?.stats as { skipped_orders?: Record<string, string> } | null)?.skipped_orders) ?? {};
+  const skippedCounts = Object.values(skippedMap).reduce<Record<string, number>>((a, r) => { a[r] = (a[r] ?? 0) + 1; return a; }, {});
+  const skippedTotal = Object.values(skippedCounts).reduce((a, n) => a + n, 0);
+  const skippedCard = wooConn && orderRows.length === 0 && skippedTotal > 0 && (
+    <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <span style={{ flex: 1, minWidth: 240 }}>Your store sent {skippedTotal} order{skippedTotal === 1 ? "" : "s"}, but none count as sales yet: {Object.entries(skippedCounts).map(([k, n]) => `${n} ${k}`).join(", ")}. Completed, processing and on-hold orders count.</span>
+      <Button asChild variant="outline"><Link href="/connections/woocommerce">Details</Link></Button>
+    </Card>
+  );
   const warningCard = currencyWarning && (
     <Card style={{ borderColor: "var(--warn)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ flex: 1, minWidth: 220 }}>{currencyWarning}</span>
@@ -118,6 +127,7 @@ export default async function CommandCenter() {
           <h1 className="page">Command center</h1>
           <p className="sub">Connect an ad account or your store to get your first briefing.</p>
         </div>
+        {skippedCard}
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span>Nothing synced yet.</span>
           <Button asChild><Link href="/connections">Connect an account</Link></Button>

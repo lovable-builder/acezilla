@@ -58,7 +58,7 @@ export function verifyWooSignature(o: { secret: string; timestamp: string | null
 export interface WooInfo { currency: string | null; siteName: string | null; pluginVersion: string | null; wooVersion: string | null; wpVersion: string | null; attribution: boolean | null }
 export type WooPush =
   | { type: "ping"; info: WooInfo }
-  | { type: "orders"; orders: Order[]; remove: string[]; skipped: Record<string, number>; currency: string | null }
+  | { type: "orders"; orders: Order[]; remove: string[]; /** Why each uncounted order was left out, by order id. */ removed: { id: string; reason: string }[]; currency: string | null }
   | { type: "disconnect" };
 
 const num = (v: unknown) => { const n = typeof v === "string" || typeof v === "number" ? Number(v) : NaN; return Number.isFinite(n) ? n : 0; };
@@ -105,7 +105,7 @@ export function parseWooPush(body: unknown): WooPush | null {
       type: "orders",
       orders: mapped.flatMap((m) => (m && "keep" in m ? [m.keep] : [])),
       remove: mapped.flatMap((m) => (m && "remove" in m ? [m.remove] : [])),
-      skipped: mapped.reduce<Record<string, number>>((acc, m) => { if (m && "remove" in m) acc[m.reason] = (acc[m.reason] ?? 0) + 1; return acc; }, {}),
+      removed: mapped.flatMap((m) => (m && "remove" in m ? [{ id: m.remove, reason: m.reason }] : [])),
       currency: str(first?.currency, 8),
     };
   }

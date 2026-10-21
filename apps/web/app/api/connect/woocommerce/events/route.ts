@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, message: "Disconnected. Imported orders were deleted." });
   }
 
-  type Stats = { plugin_version?: string; last_orders_at?: string; orders_received?: number; orders_counted?: number; skipped?: Record<string, number> };
+  type Stats = { plugin_version?: string; last_orders_at?: string; skipped_orders?: Record<string, string> };
   const stats = ((conn.stats as Stats | null) ?? {}) as Stats;
 
   /** A store in another currency than the workspace: if no ad account exists yet there is nothing to mismatch, so just adopt the store's currency. */
@@ -63,11 +63,15 @@ export async function POST(req: Request) {
   try {
     const r = await ingestOrders(admin, ws, push.orders, push.remove);
     const warning = await currencyWarning(push.currency);
-    const skipped = { ...(stats.skipped ?? {}) };
-    for (const [k, n] of Object.entries(push.skipped)) skipped[k] = (skipped[k] ?? 0) + n;
+    // Remember which orders were left out and why, by id, so re-sending history never double counts.
+    const skippedOrders = { ...(stats.skipped_orders ?? {}) };
+    for (const o of push.orders) delete skippedOrders[o.externalId];
+    for (const r2 of push.removed) skippedOrders[r2.id] = r2.reason;
+    const ids = Object.keys(skippedOrders);
+    for (const k of ids.slice(0, Math.max(0, ids.length - 500))) delete skippedOrders[k];
     await admin.from("connection").update({
       status: "active", last_sync_at: now, last_error: warning,
-      stats: { ...stats, last_orders_at: now, orders_received: (stats.orders_received ?? 0) + push.orders.length + push.remove.length, orders_counted: (stats.orders_counted ?? 0) + push.orders.length, skipped },
+      stats: { ...stats, last_orders_at: now, skipped_orders: skippedOrders },
     }).eq("id", conn.id);
     return NextResponse.json({ ok: true, stored: r.orders, removed: r.removed, warnings: warning ? [warning] : [] });
   } catch (e) {

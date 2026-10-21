@@ -71,7 +71,7 @@ test("parses pings, single and batched orders, disconnects, and refuses junk", (
   assert.ok(one && one.type === "orders" && one.orders.length === 1 && one.remove.length === 0 && one.currency === "EUR");
   const batch = parseWooPush({ type: "orders", orders: [order({ id: 1 }), order({ id: 2, status: "cancelled" }), order({ id: 3 })] });
   assert.ok(batch && batch.type === "orders" && batch.orders.length === 2 && batch.remove[0] === "woo:2");
-  assert.deepEqual(batch.type === "orders" && batch.skipped, { cancelled: 1 }, "skipped orders are counted by status");
+  assert.deepEqual(batch.type === "orders" && batch.removed, [{ id: "woo:2", reason: "cancelled" }], "skipped orders are listed with their status");
   assert.equal(parseWooPush({ type: "orders", orders: [] }), null);
   assert.equal(parseWooPush({ type: "orders", orders: Array.from({ length: 101 }, (_, i) => order({ id: i + 1 })) }), null);
   assert.equal(parseWooPush({ type: "orders", orders: [order(), { id: "bad" }] }), null, "one bad order rejects the whole push");

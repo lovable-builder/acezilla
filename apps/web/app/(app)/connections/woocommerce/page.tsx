@@ -36,8 +36,11 @@ export default async function WooCommerceSetup({ searchParams }: { searchParams:
       ])
     : [{ count: 0 }, { data: [] }];
   const heard = !!conn?.last_sync_at;
-  const stats = (conn?.stats ?? null) as { plugin_version?: string; last_orders_at?: string; orders_received?: number; orders_counted?: number; skipped?: Record<string, number> } | null;
-  const skippedText = stats?.skipped ? Object.entries(stats.skipped).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(", ") : "";
+  const stats = (conn?.stats ?? null) as { plugin_version?: string; last_orders_at?: string; skipped_orders?: Record<string, string> } | null;
+  const skippedCounts = Object.values(stats?.skipped_orders ?? {}).reduce<Record<string, number>>((a, r) => { a[r] = (a[r] ?? 0) + 1; return a; }, {});
+  const skippedTotal = Object.values(skippedCounts).reduce((a, n) => a + n, 0);
+  const skippedText = Object.entries(skippedCounts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(", ");
+  const received = (count ?? 0) + skippedTotal;
   const oldPlugin = !!stats?.plugin_version && stats.plugin_version.localeCompare(PLUGIN_VERSION, undefined, { numeric: true }) < 0;
   const storeCurrency = /^Your store sells in ([A-Z]{3})/.exec((conn?.last_error as string | undefined) ?? "")?.[1] ?? null;
   const { data: adAccts } = current && storeCurrency ? await supabase.from("ad_account").select("currency").eq("workspace_id", current.id) : { data: [] };
@@ -71,10 +74,10 @@ export default async function WooCommerceSetup({ searchParams }: { searchParams:
           </div>
           <div className="sub tabnum" style={{ margin: 0, fontSize: 13 }}>
             Plugin {stats?.plugin_version ?? "version unknown"} ·{" "}
-            {stats?.orders_received ? `${stats.orders_received} orders received from your store: ${stats.orders_counted ?? 0} counted${skippedText ? `, skipped ${skippedText}` : ""}.` : "no orders received from your store yet."}
+            {received > 0 ? `${received} order${received === 1 ? "" : "s"} received from your store: ${count ?? 0} counted as sales${skippedText ? `, ${skippedTotal} not counted (${skippedText})` : ""}.` : "no orders received from your store yet."}
           </div>
           {oldPlugin && <div style={{ fontSize: 13, color: "var(--warn)" }}>Your store runs an older plugin ({stats!.plugin_version}). Download {PLUGIN_VERSION} below and replace it.</div>}
-          {!stats?.orders_received && heard && <div style={{ fontSize: 13, color: "var(--warn)" }}>In WordPress open <b>acezilla</b> and click <b>Send last 90 days of orders</b>. The plugin will tell you how many it sent, or that your store has no recent orders.</div>}
+          {received === 0 && heard && <div style={{ fontSize: 13, color: "var(--warn)" }}>In WordPress open <b>acezilla</b> and click <b>Send last 90 days of orders</b>. The plugin will tell you how many it sent, or that your store has no recent orders.</div>}
           {conn.last_error && <div style={{ fontSize: 13, color: "var(--warn)" }}>{conn.last_error as string}</div>}
           {storeCurrency && current && (
             <form action={setWorkspaceCurrency} style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
