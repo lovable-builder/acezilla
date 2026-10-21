@@ -10,7 +10,7 @@ import { disconnect } from "../connection-actions";
 
 export const dynamic = "force-dynamic";
 const PLUGIN_ZIP = "/downloads/acezilla-for-woocommerce.zip";
-const PLUGIN_VERSION = "1.0.0"; // keep in step with plugins/acezilla-for-woocommerce/acezilla-for-woocommerce.php
+const PLUGIN_VERSION = "1.0.1"; // keep in step with plugins/acezilla-for-woocommerce/acezilla-for-woocommerce.php
 
 function Step({ n, title, done, children }: { n: number; title: string; done?: boolean; children: React.ReactNode }) {
   return (
@@ -59,8 +59,8 @@ export default async function WooCommerceSetup() {
             {heard ? `Last heard from your store ${ago(conn.last_sync_at as string)} · ` : ""}{count ?? 0} order{count === 1 ? "" : "s"} stored{latest?.[0] ? ` · latest order ${ago(latest[0].created_at as string)}` : ""}
           </div>
           {conn.last_error && <div style={{ fontSize: 13, color: "var(--warn)" }}>{conn.last_error as string}</div>}
-          {!heard && <div className="sub" style={{ margin: 0, fontSize: 13 }}>In WordPress open <b>WooCommerce → acezilla</b> and click <b>Send test</b>. This page updates by itself.</div>}
-          {heard && <div className="sub" style={{ margin: 0, fontSize: 13 }}>To test again, click <b>Send test</b> in <b>WooCommerce → acezilla</b>, then refresh this page.</div>}
+          {!heard && <div className="sub" style={{ margin: 0, fontSize: 13 }}>In WordPress open <b>acezilla</b> and click <b>Send test</b>. This page updates by itself.</div>}
+          {heard && <div className="sub" style={{ margin: 0, fontSize: 13 }}>To test again, click <b>Send test</b> in <b>acezilla</b>, then refresh this page.</div>}
           <form action={disconnect} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
             <input type="hidden" name="platform" value="woocommerce" />
             <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}><input type="checkbox" name="confirm" value="yes" required /> Delete the connection and imported orders</label>
@@ -77,16 +77,26 @@ export default async function WooCommerceSetup() {
         <ol className="sub" style={{ margin: 0, paddingLeft: 18, listStyle: "decimal", fontSize: 14, display: "flex", flexDirection: "column", gap: 4 }}>
           <li>In your WordPress admin go to <b>Plugins → Add New Plugin → Upload Plugin</b>.</li>
           <li>Choose the zip you just downloaded, click <b>Install Now</b>, then <b>Activate</b>.</li>
-          <li>Open <b>WooCommerce → acezilla</b> in the left menu.</li>
+          <li>After activating you land on the plugin's page. You can always find it as <b>acezilla</b> in the WordPress left menu, or via <b>Settings</b> under the plugin on the Plugins page.</li>
         </ol>
       </Step>
       <Step n={3} title="Create a connection code" done={!!conn}>
         <div className="sub" style={{ margin: 0, fontSize: 14 }}>The code links your store to this workspace. It works once and expires after 15 minutes.</div>
         <WooPairing />
       </Step>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <b>Can't see acezilla in WordPress?</b>
+        <ul className="sub" style={{ margin: 0, paddingLeft: 18, listStyle: "disc", fontSize: 13, display: "flex", flexDirection: "column", gap: 3 }}>
+          <li>Open <b>Plugins → Installed Plugins</b>. "acezilla for WooCommerce" must show <b>Deactivate</b>; if it shows <b>Activate</b>, click it.</li>
+          <li>Sign in as an <b>Administrator</b>. Other roles don't see the menu.</li>
+          <li>Install and activate <b>WooCommerce</b> first. The plugin needs it to read orders.</li>
+          <li>On WordPress.com, uploading plugins needs a Business plan or higher.</li>
+          <li>Already installed an older copy? Deactivate and delete it, then upload this version.</li>
+        </ul>
+      </Card>
       <Step n={4} title="Paste the code and test" done={heard}>
         <ol className="sub" style={{ margin: 0, paddingLeft: 18, listStyle: "decimal", fontSize: 14, display: "flex", flexDirection: "column", gap: 4 }}>
-          <li>In <b>WooCommerce → acezilla</b>, paste the code and click <b>Connect</b>.</li>
+          <li>In <b>acezilla</b>, paste the code and click <b>Connect</b>.</li>
           <li>Click <b>Send test</b>. The plugin tells you if acezilla heard it, and this page turns green.</li>
           <li>Click <b>Send last 90 days of orders</b> to import your history. New orders arrive on their own.</li>
         </ol>

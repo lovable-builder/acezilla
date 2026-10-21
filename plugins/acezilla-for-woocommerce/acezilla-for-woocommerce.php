@@ -3,7 +3,7 @@
  * Plugin Name:       acezilla for WooCommerce
  * Plugin URI:        https://acezilla.vercel.app
  * Description:       Sends each WooCommerce order's value, date and marketing source to acezilla so it can measure real return on ad spend. Read-only: acezilla never changes your store, and customer names, emails and addresses never leave it.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ACEZILLA_WC_VERSION', '1.0.0' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
+define( 'ACEZILLA_WC_VERSION', '1.0.1' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
 if ( ! defined( 'ACEZILLA_URL' ) ) {
 	// Override in wp-config.php (define( 'ACEZILLA_URL', 'http://localhost:3000' );) when testing against a local acezilla.
 	define( 'ACEZILLA_URL', 'https://acezilla.vercel.app' );
@@ -36,22 +36,69 @@ add_action( 'before_woocommerce_init', function () {
 } );
 
 add_action( 'plugins_loaded', function () {
-	if ( ! class_exists( 'WooCommerce' ) ) {
-		add_action( 'admin_notices', function () {
-			echo '<div class="notice notice-error"><p>' . esc_html__( 'acezilla for WooCommerce needs WooCommerce to be installed and active.', 'acezilla-for-woocommerce' ) . '</p></div>';
-		} );
-		return;
-	}
+	// The settings page, its buttons and the setup banner never depend on WooCommerce, so they are always findable.
 	add_action( 'admin_menu', 'acezilla_wc_menu' );
+	add_action( 'admin_notices', 'acezilla_wc_setup_notice' );
+	add_action( 'admin_init', 'acezilla_wc_activation_redirect' );
+	add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'acezilla_wc_action_links' );
 	add_action( 'admin_post_acezilla_wc_connect', 'acezilla_wc_handle_connect' );
 	add_action( 'admin_post_acezilla_wc_test', 'acezilla_wc_handle_test' );
 	add_action( 'admin_post_acezilla_wc_backfill', 'acezilla_wc_handle_backfill' );
 	add_action( 'admin_post_acezilla_wc_disconnect', 'acezilla_wc_handle_disconnect' );
+	if ( ! class_exists( 'WooCommerce' ) ) {
+		return;
+	}
 	add_action( 'woocommerce_order_status_changed', 'acezilla_wc_queue_order', 20, 1 );
 	add_action( 'woocommerce_order_refunded', 'acezilla_wc_queue_order', 20, 1 );
 	add_action( 'acezilla_wc_push_order', 'acezilla_wc_push_order', 10, 2 );
 	add_action( 'acezilla_wc_backfill_batch', 'acezilla_wc_backfill_batch', 10, 1 );
 }, 20 );
+
+register_activation_hook( __FILE__, function () {
+	set_transient( 'acezilla_wc_redirect', 1, 60 );
+} );
+
+/** Who may use the settings: WordPress administrators (and shop managers where WooCommerce grants it). */
+function acezilla_wc_can() {
+	return current_user_can( 'manage_options' ) || current_user_can( 'manage_woocommerce' );
+}
+
+function acezilla_wc_page_url() {
+	return admin_url( 'admin.php?page=acezilla-wc' );
+}
+
+/** After activating, land straight on the settings page. */
+function acezilla_wc_activation_redirect() {
+	if ( ! get_transient( 'acezilla_wc_redirect' ) ) {
+		return;
+	}
+	delete_transient( 'acezilla_wc_redirect' );
+	if ( wp_doing_ajax() || is_network_admin() || isset( $_GET['activate-multi'] ) || ! acezilla_wc_can() ) { // phpcs:ignore WordPress.Security.NonceVerification
+		return;
+	}
+	wp_safe_redirect( acezilla_wc_page_url() );
+	exit;
+}
+
+/** "Settings" link under the plugin's name on the Plugins page. */
+function acezilla_wc_action_links( $links ) {
+	array_unshift( $links, '<a href="' . esc_url( acezilla_wc_page_url() ) . '"><strong>' . esc_html__( 'Settings', 'acezilla-for-woocommerce' ) . '</strong></a>' );
+	return $links;
+}
+
+/** A banner on the Dashboard and Plugins pages until the store is connected. */
+function acezilla_wc_setup_notice() {
+	global $pagenow;
+	if ( acezilla_wc_conn() || ! acezilla_wc_can() || ! in_array( $pagenow, array( 'index.php', 'plugins.php' ), true ) ) {
+		return;
+	}
+	printf(
+		'<div class="notice notice-info"><p><strong>acezilla</strong> &mdash; %s <a class="button button-primary" style="margin-left:8px" href="%s">%s</a></p></div>',
+		esc_html__( 'one step left: paste your connection code to start sending orders.', 'acezilla-for-woocommerce' ),
+		esc_url( acezilla_wc_page_url() ),
+		esc_html__( 'Connect to acezilla', 'acezilla-for-woocommerce' )
+	);
+}
 
 /* ---------------------------------------------------------------- state */
 
@@ -239,7 +286,9 @@ function acezilla_wc_backfill_batch( $page = 1 ) {
 /* ---------------------------------------------------------------- admin page */
 
 function acezilla_wc_menu() {
-	add_submenu_page( 'woocommerce', 'acezilla', 'acezilla', 'manage_woocommerce', 'acezilla-wc', 'acezilla_wc_page' );
+	// Administrators, or shop managers where WooCommerce grants them access.
+	$cap = current_user_can( 'manage_options' ) ? 'manage_options' : 'manage_woocommerce';
+	add_menu_page( 'acezilla', 'acezilla', $cap, 'acezilla-wc', 'acezilla_wc_page', 'dashicons-chart-line', 56 );
 }
 
 function acezilla_wc_action_url( $action ) {
@@ -247,7 +296,7 @@ function acezilla_wc_action_url( $action ) {
 }
 
 function acezilla_wc_page() {
-	if ( ! current_user_can( 'manage_woocommerce' ) ) {
+	if ( ! acezilla_wc_can() ) {
 		return;
 	}
 	$conn  = acezilla_wc_conn();
@@ -260,12 +309,15 @@ function acezilla_wc_page() {
 	if ( is_array( $notice ) ) {
 		printf( '<div class="notice notice-%s"><p>%s</p></div>', esc_attr( $notice['type'] ), esc_html( $notice['msg'] ) );
 	}
+	if ( ! class_exists( 'WooCommerce' ) ) {
+		echo '<div class="notice notice-error"><p>' . esc_html__( 'WooCommerce is not installed or not active. Install and activate WooCommerce first; acezilla for WooCommerce reads its orders.', 'acezilla-for-woocommerce' ) . '</p></div>';
+	}
 	if ( ! is_ssl() ) {
 		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Your site is not using https. acezilla only accepts stores on https.', 'acezilla-for-woocommerce' ) . '</p></div>';
 	}
 
 	if ( ! $conn ) {
-		echo '<p>' . esc_html__( 'Open the WooCommerce page in acezilla, create a connection code, and paste it here.', 'acezilla-for-woocommerce' ) . '</p>';
+		echo '<p>' . esc_html__( 'In acezilla open Connections, then WooCommerce, click Create connection code, and paste the code here.', 'acezilla-for-woocommerce' ) . '</p>';
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		echo '<input type="hidden" name="action" value="acezilla_wc_connect" />';
 		wp_nonce_field( 'acezilla_wc' );
@@ -294,14 +346,14 @@ function acezilla_wc_page() {
 }
 
 function acezilla_wc_guard() {
-	if ( ! current_user_can( 'manage_woocommerce' ) ) {
+	if ( ! acezilla_wc_can() ) {
 		wp_die( esc_html__( 'You do not have permission to do this.', 'acezilla-for-woocommerce' ), 403 );
 	}
 	check_admin_referer( 'acezilla_wc' );
 }
 
 function acezilla_wc_back() {
-	wp_safe_redirect( admin_url( 'admin.php?page=acezilla-wc' ) );
+	wp_safe_redirect( acezilla_wc_page_url() );
 	exit;
 }
 
