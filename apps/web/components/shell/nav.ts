@@ -3,5 +3,5 @@ export const NAV = [
   { label: "Plan", items: [{ href: "/planner", name: "Planner & forecast" }, { href: "/builder", name: "Campaign builder" }] },
   { label: "Analyze", items: [{ href: "/creative", name: "Creative" }, { href: "/attribution", name: "Attribution" }, { href: "/seo", name: "SEO" }] },
   { label: "Automate", items: [{ href: "/rules", name: "Rules & approvals" }] },
-  { label: "Workspace", items: [{ href: "/connections", name: "Connections" }] },
+  { label: "Workspace", items: [{ href: "/connections", name: "Connections" }, { href: "/workspace", name: "Workspaces" }] },
 ] as const;

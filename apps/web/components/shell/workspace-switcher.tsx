@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRef } from "react";
 import { switchWorkspace } from "@/app/actions";
 
@@ -10,6 +11,7 @@ export function WorkspaceSwitcher({ workspaces, currentId }: { workspaces: { id:
       <select id="ws" name="workspace" defaultValue={currentId} onChange={() => form.current?.requestSubmit()} className="field" style={{ padding: "8px 10px" }}>
         {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
       </select>
+      <Link href="/workspace" className="eyebrow" style={{ color: "var(--accent-ink)" }}>Manage workspaces</Link>
     </form>
   );
 }
