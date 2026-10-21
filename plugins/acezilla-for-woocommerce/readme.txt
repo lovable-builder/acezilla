@@ -2,7 +2,7 @@
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 
 Sends each WooCommerce order's value, date and marketing source to acezilla so it can measure real return on ad spend.
@@ -16,6 +16,9 @@ Install the plugin, create a connection code in acezilla, paste it under the ace
 * Light: orders are sent in the background after checkout, with automatic retries.
 
 == Changelog ==
+= 1.0.2 =
+The history import now sends its first batch immediately and reports the result, including when there are no recent orders.
+
 = 1.0.1 =
 Adds an acezilla item to the main WordPress menu, a Settings link on the Plugins page, and a setup banner.
 

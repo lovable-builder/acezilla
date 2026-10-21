@@ -3,7 +3,7 @@
  * Plugin Name:       acezilla for WooCommerce
  * Plugin URI:        https://acezilla.vercel.app
  * Description:       Sends each WooCommerce order's value, date and marketing source to acezilla so it can measure real return on ad spend. Read-only: acezilla never changes your store, and customer names, emails and addresses never leave it.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ACEZILLA_WC_VERSION', '1.0.1' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
+define( 'ACEZILLA_WC_VERSION', '1.0.2' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
 if ( ! defined( 'ACEZILLA_URL' ) ) {
 	// Override in wp-config.php (define( 'ACEZILLA_URL', 'http://localhost:3000' );) when testing against a local acezilla.
 	define( 'ACEZILLA_URL', 'https://acezilla.vercel.app' );
@@ -243,7 +243,11 @@ function acezilla_wc_push_order( $order_id, $attempt = 0 ) {
 	}
 }
 
-/** History import: 50 orders per background job, newest first, last 90 days. */
+/**
+ * History import: 50 orders per batch, newest first, last 90 days. Returns how many orders were sent, or false if acezilla
+ * did not accept them. The first batch is run immediately from the button so problems show up straight away; the rest
+ * continues in the background.
+ */
 function acezilla_wc_backfill_batch( $page = 1 ) {
 	$page = max( 1, (int) $page );
 	$ids  = wc_get_orders( array(
@@ -261,8 +265,8 @@ function acezilla_wc_backfill_batch( $page = 1 ) {
 		$state['backfill_sent'] = 0;
 	}
 	if ( empty( $ids ) ) {
-		acezilla_wc_state( array( 'backfill_done' => time() ) );
-		return;
+		acezilla_wc_state( array( 'backfill_done' => time(), 'backfill_sent' => (int) ( $state['backfill_sent'] ?? 0 ) ) );
+		return 0;
 	}
 	$orders = array();
 	foreach ( $ids as $id ) {
@@ -271,9 +275,9 @@ function acezilla_wc_backfill_batch( $page = 1 ) {
 			$orders[] = acezilla_wc_order_payload( $o );
 		}
 	}
-	$r = acezilla_wc_send( 'orders', array( 'orders' => $orders ) );
+	$r = acezilla_wc_send( 'orders', array( 'orders' => $orders ) ); // last_error is set on failure
 	if ( ! $r['ok'] ) {
-		return; // last_error is set; the owner can press the button again
+		return false;
 	}
 	acezilla_wc_state( array( 'backfill_sent' => (int) ( $state['backfill_sent'] ?? 0 ) + count( $orders ), 'backfill_done' => 0 ) );
 	if ( count( $ids ) >= ACEZILLA_WC_BATCH && function_exists( 'as_enqueue_async_action' ) ) {
@@ -281,6 +285,19 @@ function acezilla_wc_backfill_batch( $page = 1 ) {
 	} else {
 		acezilla_wc_state( array( 'backfill_done' => time() ) );
 	}
+	return count( $orders );
+}
+
+/** One sentence the owner can act on after a history import. */
+function acezilla_wc_backfill_message( $sent ) {
+	if ( false === $sent ) {
+		$s = acezilla_wc_state();
+		return array( 'error', __( 'The import failed: ', 'acezilla-for-woocommerce' ) . ( ! empty( $s['last_error'] ) ? $s['last_error'] : __( 'acezilla did not accept the orders.', 'acezilla-for-woocommerce' ) ) );
+	}
+	if ( 0 === $sent ) {
+		return array( 'warning', sprintf( /* translators: %d: days */ __( 'No orders were found in the last %d days, so there is nothing to import yet. New orders will arrive automatically.', 'acezilla-for-woocommerce' ), ACEZILLA_WC_BACKFILL_DAYS ) );
+	}
+	return array( 'success', sprintf( /* translators: %d: number of orders */ _n( 'Sent %d order to acezilla.', 'Sent %d orders to acezilla. If you have more, the rest continue in the background.', $sent, 'acezilla-for-woocommerce' ), $sent ) );
 }
 
 /* ---------------------------------------------------------------- admin page */
@@ -370,10 +387,12 @@ function acezilla_wc_handle_connect() {
 		update_option( ACEZILLA_WC_OPT_CONN, array( 'connection_id' => (string) $json['connection_id'], 'secret' => (string) $json['secret'], 'connected_at' => time() ), false );
 		update_option( ACEZILLA_WC_OPT_STATE, array(), false );
 		$r = acezilla_wc_send( 'ping', array( 'info' => acezilla_wc_info() ) );
-		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( 'acezilla_wc_backfill_batch', array( 1 ), ACEZILLA_WC_GROUP );
+		if ( $r['ok'] && class_exists( 'WooCommerce' ) ) {
+			list( , $text ) = acezilla_wc_backfill_message( acezilla_wc_backfill_batch( 1 ) );
+			acezilla_wc_notice( 'success', __( 'Connected to acezilla. ', 'acezilla-for-woocommerce' ) . $text );
+		} else {
+			acezilla_wc_notice( $r['ok'] ? 'success' : 'error', $r['ok'] ? __( 'Connected to acezilla.', 'acezilla-for-woocommerce' ) : __( 'Paired, but acezilla did not answer the first test: ', 'acezilla-for-woocommerce' ) . $r['error'] );
 		}
-		acezilla_wc_notice( 'success', $r['ok'] ? __( 'Connected to acezilla. Your last 90 days of orders are being imported in the background.', 'acezilla-for-woocommerce' ) : __( 'Paired, but acezilla did not answer the first test: ', 'acezilla-for-woocommerce' ) . $r['error'] );
 	} else {
 		$msg = ( is_array( $json ) && ! empty( $json['error'] ) ) ? (string) $json['error'] : ( '' !== $err ? $err : 'acezilla answered with HTTP ' . $status . '.' );
 		acezilla_wc_notice( 'error', $msg );
@@ -410,13 +429,13 @@ function acezilla_wc_handle_test() {
 
 function acezilla_wc_handle_backfill() {
 	acezilla_wc_guard();
-	if ( function_exists( 'as_enqueue_async_action' ) ) {
-		acezilla_wc_state( array( 'backfill_sent' => 0, 'backfill_done' => 0 ) );
-		as_enqueue_async_action( 'acezilla_wc_backfill_batch', array( 1 ), ACEZILLA_WC_GROUP );
-		acezilla_wc_notice( 'success', __( 'Import started. It runs in the background and can take a few minutes on large stores.', 'acezilla-for-woocommerce' ) );
-	} else {
-		acezilla_wc_notice( 'error', __( 'WooCommerce background jobs are unavailable.', 'acezilla-for-woocommerce' ) );
+	if ( ! class_exists( 'WooCommerce' ) ) {
+		acezilla_wc_notice( 'error', __( 'WooCommerce is not active.', 'acezilla-for-woocommerce' ) );
+		acezilla_wc_back();
 	}
+	acezilla_wc_state( array( 'backfill_sent' => 0, 'backfill_done' => 0 ) );
+	list( $type, $text ) = acezilla_wc_backfill_message( acezilla_wc_backfill_batch( 1 ) );
+	acezilla_wc_notice( $type, $text );
 	acezilla_wc_back();
 }
 
