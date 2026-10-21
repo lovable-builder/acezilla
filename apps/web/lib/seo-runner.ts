@@ -34,7 +34,11 @@ export async function runAudit(admin: Admin, auditId: string): Promise<void> {
     const drafted = await draftFixes(crawl.pages);
     if (drafted.ok && drafted.fixes.length) {
       await admin.from("seo_fix").insert(drafted.fixes.map((f) => ({ audit_id: auditId, workspace_id: ws, kind: f.kind, page_url: f.pageUrl, signal: null, current: f.current, proposed: f.proposed, rationale: f.rationale })));
-    } else if (!drafted.ok) console.warn("[seo] fixes not drafted:", drafted.reason);
+      // Text on the page that tries to instruct AI systems is a finding in its own right: report it, never act on it.
+    }
+    if (drafted.ok && drafted.flagged.length) {
+      await admin.from("seo_finding").insert(drafted.flagged.slice(0, 5).map((f) => ({ audit_id: auditId, workspace_id: ws, dimension: "geo", grp: "Technical GEO", signal: "Text aimed at AI tools", finding: `The page contains text that tries to instruct AI systems: “${f.excerpt}”. It was ignored. Remove it unless it is yours.`, status: "attention", weight: 2, page_url: f.pageUrl, fix_kind: "manual" })));
+    } else if (!drafted.ok) console.warn(`[seo] fixes not drafted (${drafted.kind}):`, drafted.reason);
     const now = new Date().toISOString();
     await admin.from("seo_audit").update({ status: "done", scores: result.scores, summary: result.summary, pages_crawled: crawl.pages.length, report: buildReport(crawl), finished_at: now }).eq("id", auditId);
     await admin.from("seo_site").update({ last_audit_at: now }).eq("id", site.id);

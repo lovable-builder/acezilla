@@ -12,5 +12,5 @@ export default {
       ],
     }];
   },
-  transpilePackages: ["@acezilla/connectors", "@acezilla/models", "@acezilla/notify", "@acezilla/seo"],
+  transpilePackages: ["@acezilla/connectors", "@acezilla/llm", "@acezilla/models", "@acezilla/notify", "@acezilla/seo"],
 };
