@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const id = req.headers.get("x-acezilla-connection") ?? "";
   if (!UUID.test(id)) return unauthorized();
   const admin = createAdminClient();
-  const { data: conn } = await admin.from("connection").select("id,workspace_id,token_enc").eq("id", id).eq("platform", "woocommerce").maybeSingle();
+  const { data: conn } = await admin.from("connection").select("id,workspace_id,token_enc,stats").eq("id", id).eq("platform", "woocommerce").maybeSingle();
   if (!conn?.token_enc) return unauthorized();
   let secret: string;
   try { secret = (JSON.parse(decryptToken(conn.token_enc as string)) as { secret: string }).secret; } catch { return unauthorized(); }
@@ -38,24 +38,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, message: "Disconnected. Imported orders were deleted." });
   }
 
+  type Stats = { plugin_version?: string; last_orders_at?: string; orders_received?: number; orders_counted?: number; skipped?: Record<string, number> };
+  const stats = ((conn.stats as Stats | null) ?? {}) as Stats;
+
+  /** A store in another currency than the workspace: if no ad account exists yet there is nothing to mismatch, so just adopt the store's currency. */
   const currencyWarning = async (storeCurrency: string | null) => {
     if (!storeCurrency) return null;
+    const store = storeCurrency.toUpperCase();
     const { data: w } = await admin.from("workspace").select("currency").eq("id", ws).single();
     const wsCur = (w?.currency as string | undefined)?.toUpperCase();
-    return wsCur && wsCur !== storeCurrency.toUpperCase() ? `Your store sells in ${storeCurrency.toUpperCase()} but this workspace uses ${wsCur}. Revenue is not converted, so ROAS would be off.` : null;
+    if (!wsCur || wsCur === store) return null;
+    const { count } = await admin.from("ad_account").select("id", { count: "exact", head: true }).eq("workspace_id", ws);
+    if (!count) { await admin.from("workspace").update({ currency: store }).eq("id", ws); return null; }
+    return `Your store sells in ${store} but this workspace uses ${wsCur}. Revenue is not converted, so ROAS would be off.`;
   };
 
   if (push.type === "ping") {
     const warning = await currencyWarning(push.info.currency);
     const warnings = [warning, push.info.attribution === false ? "WooCommerce order attribution is switched off, so orders will not carry their marketing source. Turn it on in WooCommerce → Settings → Advanced → Features." : null].filter((w): w is string => !!w);
-    await admin.from("connection").update({ status: "active", last_sync_at: now, last_error: warnings[0] ?? null }).eq("id", conn.id);
+    await admin.from("connection").update({ status: "active", last_sync_at: now, last_error: warnings[0] ?? null, stats: { ...stats, plugin_version: push.info.pluginVersion ?? stats.plugin_version } }).eq("id", conn.id);
     return NextResponse.json({ ok: true, message: "acezilla received the test. Your store is connected.", warnings });
   }
 
   try {
     const r = await ingestOrders(admin, ws, push.orders, push.remove);
     const warning = await currencyWarning(push.currency);
-    await admin.from("connection").update({ status: "active", last_sync_at: now, last_error: warning }).eq("id", conn.id);
+    const skipped = { ...(stats.skipped ?? {}) };
+    for (const [k, n] of Object.entries(push.skipped)) skipped[k] = (skipped[k] ?? 0) + n;
+    await admin.from("connection").update({
+      status: "active", last_sync_at: now, last_error: warning,
+      stats: { ...stats, last_orders_at: now, orders_received: (stats.orders_received ?? 0) + push.orders.length + push.remove.length, orders_counted: (stats.orders_counted ?? 0) + push.orders.length, skipped },
+    }).eq("id", conn.id);
     return NextResponse.json({ ok: true, stored: r.orders, removed: r.removed, warnings: warning ? [warning] : [] });
   } catch (e) {
     console.warn("[woo] ingest failed", e instanceof Error ? e.message : e);

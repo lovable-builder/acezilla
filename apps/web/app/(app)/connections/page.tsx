@@ -76,7 +76,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
             logo={<BrandLogo brand="woocommerce" />} name="WooCommerce" desc="Orders from your WordPress store, for modeled ROAS. Installs as a plugin."
             connected={!!woo} lastSync={woo?.last_sync_at as string | undefined} accounts={woo?.external_user_id ? [woo.external_user_id as string] : []}
             warning={woo?.last_error ? (woo.last_error as string) : undefined}
-            action={<Button asChild variant={woo ? "outline" : "solid"}><Link href="/connections/woocommerce">{woo ? "Manage" : "Set up"}</Link></Button>}
+            action={<Button asChild variant={woo ? "outline" : "solid"}><Link href="/connections/woocommerce">{woo ? ((woo.last_error as string | null)?.startsWith("Your store sells in") ? "Fix currency" : "Manage") : "Set up"}</Link></Button>}
           />
           <Connector
             logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for modeled ROAS"

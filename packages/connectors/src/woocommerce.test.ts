@@ -56,9 +56,9 @@ test("revenue excludes tax, shipping and refunds; only known tags are kept; the 
 });
 
 test("orders that do not count are marked for removal; malformed ones are rejected", () => {
-  for (const status of ["cancelled", "refunded", "failed", "pending", "trash", "checkout-draft"]) assert.deepEqual(mapPushedOrder(order({ status })), { remove: "woo:101" });
-  assert.deepEqual(mapPushedOrder(order({ refunded: 130 })), { remove: "woo:101" }, "fully refunded");
-  assert.deepEqual(mapPushedOrder(order({ total: 5, tax: 9 })), { remove: "woo:101" }, "never negative revenue");
+  for (const status of ["cancelled", "refunded", "failed", "pending", "trash", "checkout-draft"]) assert.deepEqual(mapPushedOrder(order({ status })), { remove: "woo:101", reason: status });
+  assert.deepEqual(mapPushedOrder(order({ refunded: 130 })), { remove: "woo:101", reason: "no revenue" }, "fully refunded");
+  assert.deepEqual(mapPushedOrder(order({ total: 5, tax: 9 })), { remove: "woo:101", reason: "no revenue" }, "never negative revenue");
   for (const bad of [null, "x", {}, order({ id: "101" }), order({ id: -1 }), order({ id: 1.5 }), order({ created_gmt: "nonsense" }), order({ created_gmt: undefined })]) assert.equal(mapPushedOrder(bad), null);
 });
 
@@ -71,6 +71,7 @@ test("parses pings, single and batched orders, disconnects, and refuses junk", (
   assert.ok(one && one.type === "orders" && one.orders.length === 1 && one.remove.length === 0 && one.currency === "EUR");
   const batch = parseWooPush({ type: "orders", orders: [order({ id: 1 }), order({ id: 2, status: "cancelled" }), order({ id: 3 })] });
   assert.ok(batch && batch.type === "orders" && batch.orders.length === 2 && batch.remove[0] === "woo:2");
+  assert.deepEqual(batch.type === "orders" && batch.skipped, { cancelled: 1 }, "skipped orders are counted by status");
   assert.equal(parseWooPush({ type: "orders", orders: [] }), null);
   assert.equal(parseWooPush({ type: "orders", orders: Array.from({ length: 101 }, (_, i) => order({ id: i + 1 })) }), null);
   assert.equal(parseWooPush({ type: "orders", orders: [order(), { id: "bad" }] }), null, "one bad order rejects the whole push");

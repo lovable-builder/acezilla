@@ -58,7 +58,7 @@ export function verifyWooSignature(o: { secret: string; timestamp: string | null
 export interface WooInfo { currency: string | null; siteName: string | null; pluginVersion: string | null; wooVersion: string | null; wpVersion: string | null; attribution: boolean | null }
 export type WooPush =
   | { type: "ping"; info: WooInfo }
-  | { type: "orders"; orders: Order[]; remove: string[]; currency: string | null }
+  | { type: "orders"; orders: Order[]; remove: string[]; skipped: Record<string, number>; currency: string | null }
   | { type: "disconnect" };
 
 const num = (v: unknown) => { const n = typeof v === "string" || typeof v === "number" ? Number(v) : NaN; return Number.isFinite(n) ? n : 0; };
@@ -71,14 +71,15 @@ const pick = (o: unknown, keys: string[]) => {
 };
 
 /** One order from the plugin. Revenue is total minus tax, shipping and refunds, so it is comparable to ad-platform revenue. */
-export function mapPushedOrder(raw: unknown): { keep: Order } | { remove: string } | null {
+export function mapPushedOrder(raw: unknown): { keep: Order } | { remove: string; reason: string } | null {
   const o = raw as Record<string, unknown> | null;
   if (!o || typeof o !== "object" || typeof o.id !== "number" || !Number.isInteger(o.id) || o.id <= 0) return null;
   const t = typeof o.created_gmt === "string" ? new Date(o.created_gmt) : null;
   if (!t || Number.isNaN(t.getTime())) return null;
   const externalId = `${WOO_ID_PREFIX}${o.id}`;
   const revenue = Math.max(0, round2(num(o.total) - num(o.tax) - num(o.shipping) - num(o.shipping_tax) - Math.abs(num(o.refunded))));
-  if (!COUNTED_STATUSES.includes(String(o.status)) || revenue <= 0) return { remove: externalId };
+  if (!COUNTED_STATUSES.includes(String(o.status))) return { remove: externalId, reason: String(o.status).slice(0, 30) };
+  if (revenue <= 0) return { remove: externalId, reason: "no revenue" };
   const cid = typeof o.customer_id === "number" ? o.customer_id : 0;
   const hash = typeof o.email_hash === "string" && /^[0-9a-f]{64}$/.test(o.email_hash) ? o.email_hash : null;
   const customerId = cid > 0 ? `${WOO_ID_PREFIX}c${cid}` : hash ? `${WOO_ID_PREFIX}h${createHash("sha256").update(hash).digest("hex").slice(0, 16)}` : "";
@@ -104,6 +105,7 @@ export function parseWooPush(body: unknown): WooPush | null {
       type: "orders",
       orders: mapped.flatMap((m) => (m && "keep" in m ? [m.keep] : [])),
       remove: mapped.flatMap((m) => (m && "remove" in m ? [m.remove] : [])),
+      skipped: mapped.reduce<Record<string, number>>((acc, m) => { if (m && "remove" in m) acc[m.reason] = (acc[m.reason] ?? 0) + 1; return acc; }, {}),
       currency: str(first?.currency, 8),
     };
   }

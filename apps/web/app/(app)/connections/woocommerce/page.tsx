@@ -28,7 +28,7 @@ function Step({ n, title, done, children }: { n: number; title: string; done?: b
 export default async function WooCommerceSetup({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const { notice, error } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();
-  const { data: conn } = current ? await supabase.from("connection").select("id,status,last_sync_at,last_error,external_user_id").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle() : { data: null };
+  const { data: conn } = current ? await supabase.from("connection").select("id,status,last_sync_at,last_error,external_user_id,stats").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle() : { data: null };
   const [{ count }, { data: latest }] = current && conn
     ? await Promise.all([
         supabase.from("order").select("id", { count: "exact", head: true }).eq("workspace_id", current.id).like("external_id", "woo:%"),
@@ -36,6 +36,9 @@ export default async function WooCommerceSetup({ searchParams }: { searchParams:
       ])
     : [{ count: 0 }, { data: [] }];
   const heard = !!conn?.last_sync_at;
+  const stats = (conn?.stats ?? null) as { plugin_version?: string; last_orders_at?: string; orders_received?: number; orders_counted?: number; skipped?: Record<string, number> } | null;
+  const skippedText = stats?.skipped ? Object.entries(stats.skipped).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(", ") : "";
+  const oldPlugin = !!stats?.plugin_version && stats.plugin_version.localeCompare(PLUGIN_VERSION, undefined, { numeric: true }) < 0;
   const storeCurrency = /^Your store sells in ([A-Z]{3})/.exec((conn?.last_error as string | undefined) ?? "")?.[1] ?? null;
   const { data: adAccts } = current && storeCurrency ? await supabase.from("ad_account").select("currency").eq("workspace_id", current.id) : { data: [] };
   const adCurrencies = [...new Set((adAccts ?? []).map((a) => String(a.currency ?? "").toUpperCase()).filter(Boolean))];
@@ -66,6 +69,12 @@ export default async function WooCommerceSetup({ searchParams }: { searchParams:
           <div className="sub tabnum" style={{ margin: 0, fontSize: 13 }}>
             {heard ? `Last heard from your store ${ago(conn.last_sync_at as string)} · ` : ""}{count ?? 0} order{count === 1 ? "" : "s"} stored{latest?.[0] ? ` · latest order ${ago(latest[0].created_at as string)}` : ""}
           </div>
+          <div className="sub tabnum" style={{ margin: 0, fontSize: 13 }}>
+            Plugin {stats?.plugin_version ?? "version unknown"} ·{" "}
+            {stats?.orders_received ? `${stats.orders_received} orders received from your store: ${stats.orders_counted ?? 0} counted${skippedText ? `, skipped ${skippedText}` : ""}.` : "no orders received from your store yet."}
+          </div>
+          {oldPlugin && <div style={{ fontSize: 13, color: "var(--warn)" }}>Your store runs an older plugin ({stats!.plugin_version}). Download {PLUGIN_VERSION} below and replace it.</div>}
+          {!stats?.orders_received && heard && <div style={{ fontSize: 13, color: "var(--warn)" }}>In WordPress open <b>acezilla</b> and click <b>Send last 90 days of orders</b>. The plugin will tell you how many it sent, or that your store has no recent orders.</div>}
           {conn.last_error && <div style={{ fontSize: 13, color: "var(--warn)" }}>{conn.last_error as string}</div>}
           {storeCurrency && current && (
             <form action={setWorkspaceCurrency} style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
