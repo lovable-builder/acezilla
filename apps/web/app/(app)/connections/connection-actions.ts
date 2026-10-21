@@ -24,7 +24,7 @@ export async function syncNow(formData: FormData) {
   try {
     const { admin, conn } = await load(String(formData.get("platform")));
     const r = await syncConnection(admin, conn);
-    qs = r.ok ? `notice=${encodeURIComponent(conn.platform === "woocommerce" ? `Synced ${r.rows} orders from WooCommerce` : `Synced ${r.rows} daily rows from ${LABEL[conn.platform]}`)}` : `error=${encodeURIComponent(r.error)}`;
+    qs = r.ok ? `notice=${encodeURIComponent(`Synced ${r.rows} daily rows from ${LABEL[conn.platform]}`)}` : `error=${encodeURIComponent(r.error)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Sync failed")}`;
   }
@@ -48,7 +48,7 @@ export async function disconnect(formData: FormData) {
     if (e1) throw new Error(e1.message);
     const { error: e2 } = await admin.from("connection").delete().eq("id", conn.id);
     if (e2) throw new Error(e2.message);
-    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${conn.platform === "woocommerce" ? " To finish, delete the acezilla key in WooCommerce > Settings > Advanced > REST API." : ""}`)}`;
+    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${conn.platform === "woocommerce" ? " You can also deactivate the acezilla plugin in WordPress." : ""}`)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not disconnect")}`;
   }

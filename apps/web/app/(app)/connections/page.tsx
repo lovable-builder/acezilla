@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BrandLogo } from "@/components/brand/logo";
 import { ago } from "@/lib/format";
-import { disconnect, syncNow } from "./connection-actions";
-import { startWooConnect } from "./woocommerce-actions";
+import { syncNow } from "./connection-actions";
 
 const STEPS = ["Workspace", "Connect accounts", "Goals & KPIs", "Historical import"];
 const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
@@ -22,9 +21,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const conn = (p: string) => conns?.find((c) => c.platform === p);
   const names = (p: string) => (accts ?? []).filter((a) => a.platform === p).map((a) => a.name as string);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const wooReady = !!(process.env.META_TOKEN_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY);
   const woo = conn("woocommerce");
-  const wooBroken = woo && (woo.status === "error" || woo.status === "needs_reauth");
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   return (
@@ -76,27 +73,10 @@ export default async function Connections({ searchParams }: { searchParams: Prom
             connected={false} action={<Button variant="outline" disabled title="Waiting for TikTok to approve our app">Pending approval</Button>}
           />
           <Connector
-            logo={<BrandLogo brand="woocommerce" />} name="WooCommerce" desc="Orders from your WordPress store, for modeled ROAS (read-only)"
+            logo={<BrandLogo brand="woocommerce" />} name="WooCommerce" desc="Orders from your WordPress store, for modeled ROAS. Installs as a plugin."
             connected={!!woo} lastSync={woo?.last_sync_at as string | undefined} accounts={woo?.external_user_id ? [woo.external_user_id as string] : []}
-            problem={wooBroken ? (woo.status === "needs_reauth" ? "WooCommerce refused the keys. Reconnect to keep syncing." : `Sync failed: ${woo.last_error ?? "unknown error"}`) : undefined}
-            warning={!wooBroken && woo?.last_error ? (woo.last_error as string) : undefined}
-            action={
-              woo ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <form action={syncNow}><input type="hidden" name="platform" value="woocommerce" /><Button variant="ghost">Sync now</Button></form>
-                  <form action={disconnect} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <input type="hidden" name="platform" value="woocommerce" />
-                    <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}><input type="checkbox" name="confirm" value="yes" required /> Delete imported orders</label>
-                    <Button variant="outline" style={{ color: "var(--neg)" }}>Disconnect</Button>
-                  </form>
-                </div>
-              ) : wooReady ? (
-                <form action={startWooConnect} style={{ display: "flex", gap: 8, flexWrap: "wrap", width: "100%" }}>
-                  <input className="field" name="store" required placeholder="yourstore.com" aria-label="Your store address" autoComplete="off" spellCheck={false} style={{ flex: 1, minWidth: 180 }} />
-                  <Button>Connect WooCommerce</Button>
-                </form>
-              ) : <Button variant="outline" disabled title="Add the encryption key">Not configured</Button>
-            }
+            warning={woo?.last_error ? (woo.last_error as string) : undefined}
+            action={<Button asChild variant={woo ? "outline" : "solid"}><Link href="/connections/woocommerce">{woo ? "Manage" : "Set up"}</Link></Button>}
           />
           <Connector
             logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for modeled ROAS"
