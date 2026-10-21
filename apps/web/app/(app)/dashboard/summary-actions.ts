@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { buildWorkspaceBrief } from "@/lib/ai-brief";
-import { AI_LIMITS, friendlyAiError, takeAiQuota } from "@/lib/ai-guard";
+import { friendlyAiError, takeAiQuota } from "@/lib/ai-guard";
 import { getLlm } from "@/lib/llm";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWorkspaceContext } from "@/lib/workspace";
@@ -28,4 +28,3 @@ export async function generateWeeklySummary(): Promise<void> {
   revalidatePath("/dashboard");
 }
 
-export { AI_LIMITS };
