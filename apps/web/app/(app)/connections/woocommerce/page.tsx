@@ -7,6 +7,7 @@ import { AutoRefresh } from "@/components/seo/auto-refresh";
 import { WooPairing } from "@/components/connections/woo-pairing";
 import { ago } from "@/lib/format";
 import { disconnect } from "../connection-actions";
+import { setWorkspaceCurrency } from "../woocommerce-actions";
 
 export const dynamic = "force-dynamic";
 const PLUGIN_ZIP = "/downloads/acezilla-for-woocommerce.zip";
@@ -24,7 +25,8 @@ function Step({ n, title, done, children }: { n: number; title: string; done?: b
   );
 }
 
-export default async function WooCommerceSetup() {
+export default async function WooCommerceSetup({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
+  const { notice, error } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();
   const { data: conn } = current ? await supabase.from("connection").select("id,status,last_sync_at,last_error,external_user_id").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle() : { data: null };
   const [{ count }, { data: latest }] = current && conn
@@ -34,6 +36,10 @@ export default async function WooCommerceSetup() {
       ])
     : [{ count: 0 }, { data: [] }];
   const heard = !!conn?.last_sync_at;
+  const storeCurrency = /^Your store sells in ([A-Z]{3})/.exec((conn?.last_error as string | undefined) ?? "")?.[1] ?? null;
+  const { data: adAccts } = current && storeCurrency ? await supabase.from("ad_account").select("currency").eq("workspace_id", current.id) : { data: [] };
+  const adCurrencies = [...new Set((adAccts ?? []).map((a) => String(a.currency ?? "").toUpperCase()).filter(Boolean))];
+  const adMismatch = storeCurrency ? adCurrencies.filter((c) => c !== storeCurrency) : [];
 
   return (
     <>
@@ -47,6 +53,8 @@ export default async function WooCommerceSetup() {
       </div>
       <p className="sub" style={{ margin: 0, maxWidth: 680 }}>You install a small plugin on your store. It sends each order's value, date and marketing source to acezilla so we can measure real return on ad spend. It is read-only: acezilla never changes your store, and customer names, emails and addresses never leave it.</p>
 
+      {notice && <Card style={{ color: "var(--pos)" }}>{notice}</Card>}
+      {error && <Card style={{ color: "var(--neg)" }}>{error}</Card>}
       {conn ? (
         <Card style={{ borderColor: conn.last_error ? "var(--warn)" : heard ? "var(--pos)" : "var(--line2)", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -59,6 +67,15 @@ export default async function WooCommerceSetup() {
             {heard ? `Last heard from your store ${ago(conn.last_sync_at as string)} · ` : ""}{count ?? 0} order{count === 1 ? "" : "s"} stored{latest?.[0] ? ` · latest order ${ago(latest[0].created_at as string)}` : ""}
           </div>
           {conn.last_error && <div style={{ fontSize: 13, color: "var(--warn)" }}>{conn.last_error as string}</div>}
+          {storeCurrency && current && (
+            <form action={setWorkspaceCurrency} style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+              <input type="hidden" name="currency" value={storeCurrency} />
+              <Button>Switch this workspace to {storeCurrency}</Button>
+              <div className="sub" style={{ margin: 0, fontSize: 12 }}>
+                Dashboards will show money in {storeCurrency}.{adMismatch.length > 0 ? ` Your connected ad accounts report in ${adMismatch.join(", ")}, so spend and revenue still would not match until they use the same currency.` : adCurrencies.length > 0 ? " Your ad accounts already use it." : ""}
+              </div>
+            </form>
+          )}
           {!heard && <div className="sub" style={{ margin: 0, fontSize: 13 }}>In WordPress open <b>acezilla</b> and click <b>Send test</b>. This page updates by itself.</div>}
           {heard && <div className="sub" style={{ margin: 0, fontSize: 13 }}>To test again, click <b>Send test</b> in <b>acezilla</b>, then refresh this page.</div>}
           <form action={disconnect} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
