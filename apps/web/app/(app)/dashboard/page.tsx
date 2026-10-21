@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { buildDashboard, buildStoreSales, storeRoas, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
+import { buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,36 @@ import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
 
 const PAGE = 1000;
-const ORDER_DAYS = 120;
+const PRESETS = [7, 14, 30, 60, 90] as const;
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The period from the URL: a preset number of days ending at the latest data, or a custom from/to range (up to a year). */
+function parsePeriod(sp: { days?: string; from?: string; to?: string }) {
+  if (sp.from && sp.to && ISO.test(sp.from) && ISO.test(sp.to) && sp.from <= sp.to) {
+    const span = Math.round((Date.parse(`${sp.to}T00:00:00Z`) - Date.parse(`${sp.from}T00:00:00Z`)) / 86400000) + 1;
+    if (span >= 1 && span <= 366) return { windowDays: span, endDate: sp.to, custom: { from: sp.from, to: sp.to }, days: null as number | null };
+  }
+  const n = Number(sp.days);
+  const days = (PRESETS as readonly number[]).includes(n) ? n : 30;
+  return { windowDays: days, endDate: undefined as string | undefined, custom: null, days };
+}
+
+function PeriodBar({ active, custom }: { active: number | null; custom: { from: string; to: string } | null }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <span className="eyebrow">Period</span>
+      {PRESETS.map((n) => (
+        <Link key={n} href={`/dashboard?days=${n}`} className={`nav-item${active === n ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>{n} days</Link>
+      ))}
+      <form action="/dashboard" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="date" name="from" className="field" defaultValue={custom?.from} required aria-label="From" style={{ padding: "5px 8px" }} />
+        <span className="eyebrow">to</span>
+        <input type="date" name="to" className="field" defaultValue={custom?.to} required aria-label="To" style={{ padding: "5px 8px" }} />
+        <Button variant={custom ? "solid" : "outline"} size="sm">Apply</Button>
+      </form>
+    </div>
+  );
+}
 
 const tone = (good: boolean | null, dv: number | null) => dv === null || good === null ? "var(--ink3)" : (dv >= 0) === good ? "var(--pos)" : "var(--neg)";
 
@@ -58,7 +87,8 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas }: { store:
   );
 }
 
-export default async function CommandCenter() {
+export default async function CommandCenter({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string }> }) {
+  const period = parsePeriod(await searchParams);
   const { supabase, current } = await getWorkspaceContext();
   if (!current) return <Card>No workspace found for this account.</Card>;
 
@@ -75,7 +105,8 @@ export default async function CommandCenter() {
   }
 
   const orderRows: OrderRow[] = [];
-  const since = new Date(Date.now() - ORDER_DAYS * 86400000).toISOString();
+  const sinceDate = shiftDate(period.endDate ?? new Date().toISOString().slice(0, 10), -(2 * period.windowDays + (period.endDate ? 2 : 14)));
+  const since = `${sinceDate}T00:00:00Z`;
   for (let from = 0; from < 30 * PAGE; from += PAGE) {
     const { data } = await supabase.from("order").select("created_at,revenue,utm,click_ids,customer_id").eq("workspace_id", current.id).gte("created_at", since).order("created_at", { ascending: false }).range(from, from + PAGE - 1);
     for (const r of data ?? []) orderRows.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
@@ -101,9 +132,10 @@ export default async function CommandCenter() {
 
   if (rows.length === 0 && orderRows.length > 0) {
     const cur0 = current.currency;
-    const store0 = buildStoreSales(orderRows);
+    const store0 = buildStoreSales(orderRows, { windowDays: period.windowDays, endDate: period.endDate });
     return (
       <>
+        <PeriodBar active={period.days} custom={period.custom} />
         <div>
           <div className="eyebrow">Overview · last {store0.windowDays} days to {store0.endDate}</div>
           <h1 className="page">Your store made {money(store0.revenue.value, cur0)} from {int(store0.orders.value)} order{store0.orders.value === 1 ? "" : "s"}.</h1>
@@ -136,7 +168,7 @@ export default async function CommandCenter() {
     );
   }
 
-  const d = buildDashboard(rows);
+  const d = buildDashboard(rows, { windowDays: period.windowDays, endDate: period.endDate });
   const cur = current.currency;
   const k = d.kpis;
   const store = orderRows.length > 0 ? buildStoreSales(orderRows, { endDate: d.endDate, windowDays: d.windowDays }) : null;
@@ -150,8 +182,11 @@ export default async function CommandCenter() {
     { label: "Conversions", v: int(k.conversions.value), d: k.conversions.deltaPct, good: true, s: k.conversions.series },
   ];
 
+  const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] });
+
   return (
     <>
+      <PeriodBar active={period.days} custom={period.custom} />
       <div>
         <div className="eyebrow">Overview · last {d.windowDays} days to {d.endDate}</div>
         <h1 className="page">
@@ -163,6 +198,20 @@ export default async function CommandCenter() {
         <p className="sub">{store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
       </div>
       {warningCard}
+
+      <Card>
+        <h2 className="h2"><span className="n">··</span>Insights</h2>
+        {insights.length === 0 ? <p className="sub">Nothing stands out in this period. Pick a longer period or a different range for more.</p> : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+            {insights.map((i) => (
+              <li key={i.id} style={{ display: "flex", gap: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 7, flexShrink: 0, background: i.tone === "bad" ? "var(--neg)" : i.tone === "warn" ? "var(--warn)" : i.tone === "good" ? "var(--pos)" : "var(--accent)" }} />
+                <div><b style={{ fontWeight: 600 }}>{i.title}</b><div className="sub" style={{ margin: 0, fontSize: 13 }}>{i.detail}</div></div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <div className="kpis">
         {cells.map((c) => (
