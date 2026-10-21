@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { extractTerms, type Term } from "./keywords";
 
 export interface PageData {
   url: string; status: number; ms: number; bytes: number;
@@ -12,6 +13,7 @@ export interface PageData {
   jsonLdTypes: string[]; jsonLdInvalid: number; hasSameAs: boolean; faqSchema: boolean;
   lists: number; tables: number; details: number;
   hasMailto: boolean; hasTel: boolean; text: string;
+  /** Most-used words and phrases on the page. */ terms: Term[];
   headers: { hsts: boolean; contentTypeOptions: boolean; referrerPolicy: boolean; frameProtection: boolean };
 }
 
@@ -77,7 +79,7 @@ export function analyzePage(html: string, meta: { url: string; status: number; m
     lang: $("html").attr("lang") ?? null, viewport: $('meta[name="viewport" i]').length > 0,
     og: metaNames('meta[property^="og:"]', "property"), twitter: metaNames('meta[name^="twitter:"]', "name"),
     h1: headings("h1"), h2, h3Count: h3.length, questionHeadings: [...h2, ...h3].filter((x) => /\?$/.test(x)).length,
-    wordCount: text ? text.split(" ").length : 0, excerpt: text.slice(0, 1500), text,
+    wordCount: text ? text.split(" ").length : 0, excerpt: text.slice(0, 1500), text, terms: extractTerms(text),
     images: { total: imgs.length, withAlt: imgs.filter((e) => (alt(e) ?? "").trim() !== "").length, emptyAlt: imgs.filter((e) => alt(e) === "").length, missingAlt: imgs.filter((e) => alt(e) === undefined).length },
     internalLinks: [...internal], externalHosts: [...external],
     jsonLdTypes: [...types], jsonLdInvalid: invalid, hasSameAs: sameAs, faqSchema: faq,

@@ -5,3 +5,5 @@ export * from "./analyze";
 export * from "./crawl";
 export * from "./score";
 export * from "./fixes";
+export * from "./keywords";
+export * from "./report";

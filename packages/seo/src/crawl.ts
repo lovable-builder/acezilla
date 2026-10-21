@@ -9,8 +9,12 @@ export interface SiteFiles {
   sitemap: { present: boolean; urlCount: number; url: string | null };
 }
 export type CrawlResult =
-  | { ok: true; origin: string; startUrl: string; pages: PageData[]; files: SiteFiles; skippedByRobots: number; capped: boolean }
+  | { ok: true; origin: string; startUrl: string; pages: PageData[]; files: SiteFiles; skippedByRobots: number; capped: boolean; broken?: BrokenLink[]; linksChecked?: number }
   | { ok: false; error: string };
+
+/** An internal URL that answered with an error (or not at all), and the pages that link to it. */
+export interface BrokenLink { url: string; status: number | null; from: string[] }
+const MAX_LINK_CHECKS = 40;
 
 export interface CrawlOptions extends Pick<SafeFetchOptions, "fetch" | "lookup"> { maxPages?: number; concurrency?: number; delayMs?: number; onProgress?: (done: number, total: number) => void }
 
@@ -50,6 +54,7 @@ export async function crawlSite(startUrl: string, o: CrawlOptions = {}): Promise
   sitemapPages.forEach(enqueue);
   const pages: PageData[] = [];
   let skipped = 0, started = 0;
+  const fetched = new Set<string>([homeKey]), failures = new Map<string, number | null>();
   const homeData = analyzePage(home.body, { url: home.url, status: home.status, ms: home.ms, headers: home.headers });
   pages.push(homeData); started++; queue.shift();
   homeData.internalLinks.forEach(enqueue);
@@ -60,8 +65,10 @@ export async function crawlSite(startUrl: string, o: CrawlOptions = {}): Promise
       if (!next) { if (queue.length === 0) await sleep(20); if (queue.length === 0) return; continue; }
       if (!isAllowed(rules, BOT_UA, new URL(next).pathname)) { skipped++; continue; }
       started++;
+      fetched.add(next);
       await sleep(delay);
       const r = await safeFetch(next, { ...fetchOpts, requireHtml: true });
+      if (r.ok ? r.status >= 400 : !r.unsafe && (r.status === undefined || r.status >= 400)) failures.set(next, r.ok ? r.status : r.status ?? null);
       if (r.ok && r.status < 400) {
         const d = analyzePage(r.body, { url: r.url, status: r.status, ms: r.ms, headers: r.headers });
         pages.push(d); d.internalLinks.forEach(enqueue); o.onProgress?.(pages.length, Math.min(maxPages, seen.size));
@@ -69,8 +76,23 @@ export async function crawlSite(startUrl: string, o: CrawlOptions = {}): Promise
     }
   };
   await Promise.all(Array.from({ length: concurrency }, worker));
+
+  // Link check: every internal URL the pages point to that we did not fetch as a page, capped.
+  const sources = new Map<string, Set<string>>();
+  for (const p of pages) for (const l of p.internalLinks) { try { const k = normUrl(l); (sources.get(k) ?? sources.set(k, new Set()).get(k)!).add(new URL(p.url).pathname); } catch { /* ignore */ } }
+  const toCheck = [...sources.keys()].filter((k) => !fetched.has(k) && sameHost(k) && isAllowed(rules, BOT_UA, new URL(k).pathname)).slice(0, MAX_LINK_CHECKS);
+  const checkQueue = [...toCheck];
+  const checkWorker = async () => {
+    for (let k = checkQueue.shift(); k; k = checkQueue.shift()) {
+      await sleep(Math.min(delay, 100));
+      const r = await safeFetch(k, { ...fetchOpts, maxBytes: 64 * 1024, timeoutMs: 8000 });
+      if (r.ok ? r.status >= 400 : !r.unsafe && (r.status === undefined || r.status >= 400)) failures.set(k, r.ok ? r.status : r.status ?? null);
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, checkWorker));
+  const broken: BrokenLink[] = [...failures].map(([url, status]) => ({ url, status, from: [...(sources.get(url) ?? [])].slice(0, 5) }));
   return {
-    ok: true, origin, startUrl: home.url, pages, skippedByRobots: skipped, capped: pages.length >= maxPages && queue.length > 0,
+    ok: true, origin, startUrl: home.url, pages, skippedByRobots: skipped, capped: pages.length >= maxPages && queue.length > 0, broken, linksChecked: fetched.size + toCheck.length,
     files: {
       robots: { present: robotsPresent, blocksAll: !isAllowed(rules, BOT_UA, "/"), blockedBots, sitemaps: rules.sitemaps },
       sitemap: { present: smUrls.length > 0, urlCount: smUrls.length, url: smUrls.length ? smUrl : null },

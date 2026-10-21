@@ -1,4 +1,7 @@
 {
   "regions": ["dub1"],
-  "crons": [{ "path": "/api/cron/sync", "schedule": "0 5 * * *" }]
+  "crons": [
+    { "path": "/api/cron/sync", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/seo", "schedule": "0 6 * * 1" }
+  ]
 }

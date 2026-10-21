@@ -1,5 +1,5 @@
 import "server-only";
-import { crawlSite, scoreAudit } from "@acezilla/seo";
+import { buildReport, crawlSite, scoreAudit } from "@acezilla/seo";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { draftFixes } from "@/lib/seo-fixes";
 
@@ -36,7 +36,7 @@ export async function runAudit(admin: Admin, auditId: string): Promise<void> {
       await admin.from("seo_fix").insert(drafted.fixes.map((f) => ({ audit_id: auditId, workspace_id: ws, kind: f.kind, page_url: f.pageUrl, signal: null, current: f.current, proposed: f.proposed, rationale: f.rationale })));
     } else if (!drafted.ok) console.warn("[seo] fixes not drafted:", drafted.reason);
     const now = new Date().toISOString();
-    await admin.from("seo_audit").update({ status: "done", scores: result.scores, summary: result.summary, pages_crawled: crawl.pages.length, finished_at: now }).eq("id", auditId);
+    await admin.from("seo_audit").update({ status: "done", scores: result.scores, summary: result.summary, pages_crawled: crawl.pages.length, report: buildReport(crawl), finished_at: now }).eq("id", auditId);
     await admin.from("seo_site").update({ last_audit_at: now }).eq("id", site.id);
   } catch (e) {
     await fail("The audit could not be completed. Please try again.");

@@ -7,7 +7,7 @@ type Admin = ReturnType<typeof createAdminClient>;
 const FROM = process.env.RESEND_FROM || "acezilla <onboarding@resend.dev>";
 
 /** Emails the people who manage a workspace (owners and admins). Returns how many sends succeeded. */
-async function notify(admin: Admin, workspaceId: string, subject: string, html: string, text: string, key: string) {
+export async function notify(admin: Admin, workspaceId: string, subject: string, html: string, text: string, key: string) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return 0;
   const { data: ws } = await admin.from("workspace").select("org_id").eq("id", workspaceId).maybeSingle();

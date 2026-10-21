@@ -59,6 +59,9 @@ export function scoreAudit(crawl: Extract<CrawlResult, { ok: true }>): AuditScor
   const badH1 = pages.filter((p) => p.h1.length !== 1);
   add("seo", "Technical On-Page", "Headings (H1)", home.h1.length === 0 ? "missing" : badH1.length === 0 ? "good" : "attention",
     home.h1.length === 0 ? "The homepage has no H1." : badH1.length === 0 ? `Every crawled page has exactly one H1 (homepage: “${home.h1[0]}”).` : `${badH1.length} of ${pages.length} pages have no H1 or more than one.`, 3, { pageUrl: badH1[0]?.url ?? home.url, fixKind: "h1" });
+  const brokenN = crawl.broken?.length ?? 0, b0 = crawl.broken?.[0];
+  add("seo", "Technical On-Page", "Broken internal links", crawl.linksChecked === undefined ? "not_measured" : brokenN === 0 ? "good" : brokenN <= 2 ? "attention" : "missing",
+    crawl.linksChecked === undefined ? "Links were not checked." : brokenN === 0 ? `All ${crawl.linksChecked} internal URLs checked answered normally.` : `${brokenN} of ${crawl.linksChecked} internal URLs checked are broken, e.g. ${new URL(b0!.url).pathname} (${b0!.status ?? "no response"})${b0!.from[0] ? `, linked from ${b0!.from[0]}` : ""}.`, 3, { pageUrl: b0?.url, fixKind: "manual" });
   add("seo", "Technical On-Page", "Canonical tag", home.canonical ? "good" : "missing", home.canonical ? `Homepage canonical: ${home.canonical}.` : "No canonical tag on the homepage, so duplicate URLs may compete with each other.", 2, { pageUrl: home.url, fixKind: "manual" });
   const noindexHome = /noindex/i.test(home.robotsMeta ?? "");
   add("seo", "Technical On-Page", "Indexability", noindexHome || files.robots.blocksAll ? "missing" : "good", noindexHome ? "The homepage has a noindex tag, so search engines are told to ignore it." : files.robots.blocksAll ? "robots.txt blocks our crawler (and likely search engines) from the whole site." : `No accidental noindex found on ${indexable.length} indexable page(s).`, 3, { fixKind: "manual" });

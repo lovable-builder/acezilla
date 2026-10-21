@@ -55,3 +55,12 @@ test("sendEmail posts to Resend with a bearer header and reports failures", asyn
   const down = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
   assert.deepEqual(await sendEmail({ apiKey: "k", from: "f", to: "t", subject: "s", html: "h", fetch: down }), { ok: false, status: 0, error: "offline" });
 });
+
+test("SEO weekly email names the drops and escapes the host", async () => {
+  const { renderSeoEmail } = await import("./seo-alert");
+  const m = renderSeoEmail({ host: "a<b>.com", url: "https://x.test/seo/1", scores: { seo: 7, geo: 6, aeo: 8 }, drops: [{ dimension: "seo", from: 8, to: 7 }], reasons: ["Indexability: now missing"], fixed: ["Title tag"] });
+  assert.match(m.subject, /SEO 8→7/);
+  assert.ok(!m.html.includes("a<b>.com") && m.html.includes("a&lt;b&gt;.com"));
+  assert.match(m.text, /Indexability: now missing/);
+  assert.match(m.html, /Improved since last week: Title tag/);
+});
