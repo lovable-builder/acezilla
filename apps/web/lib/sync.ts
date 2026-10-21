@@ -1,11 +1,12 @@
 import "server-only";
 import {
   fetchGoogleDataset, fetchMetaDataset, GoogleApiError, listGoogleAdAccounts, listMetaAdAccounts, MetaApiError,
-  refreshGoogleAccessToken,
+  refreshGoogleAccessToken, fetchWooOrders, WooApiError,
 } from "@acezilla/connectors";
 import { decryptToken } from "@/lib/crypto";
 import { alertIfNeeded } from "@/lib/alerts";
-import { ingestDataset } from "@/lib/ingest";
+import { ingestDataset, ingestOrders } from "@/lib/ingest";
+import { guardedFetch } from "@/lib/store-fetch";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -21,6 +22,7 @@ const PREFIX: Record<string, string> = { meta: "meta-acct-", google: "google-acc
 export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DAYS): Promise<SyncResult> {
   try {
     if (!conn.token_enc) throw new Error("Not connected");
+    if (conn.platform === "woocommerce") return await syncWoo(admin, conn, days);
     const prefix = PREFIX[conn.platform];
     if (!prefix) throw new Error(`Unsupported platform ${conn.platform}`);
     const { data: rows } = await admin.from("ad_account").select("external_id").eq("connection_id", conn.id);
@@ -46,16 +48,26 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
     return { ok: true, campaigns: r.campaigns, rows: r.insights };
   } catch (e) {
     const error = e instanceof Error ? e.message : "Sync failed";
-    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof GoogleApiError && /invalid_grant/i.test(error));
+    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof GoogleApiError && /invalid_grant/i.test(error)) || (e instanceof WooApiError && (e.status === 401 || e.status === 403));
     await admin.from("connection").update({ status: needsReauth ? "needs_reauth" : "error", last_error: error.slice(0, 300) }).eq("id", conn.id);
     return { ok: false, error, needsReauth };
   }
 }
 
+/** WooCommerce: orders only. Re-reads everything modified in the window, so refunds and cancellations are picked up. */
+async function syncWoo(admin: Admin, conn: ConnRow, days: number): Promise<SyncResult> {
+  const c = JSON.parse(decryptToken(conn.token_enc!)) as { storeUrl: string; key: string; secret: string };
+  const since = iso(new Date(Date.now() - days * 86400000));
+  const r = await fetchWooOrders({ ...c, fetch: guardedFetch }, since);
+  const done = await ingestOrders(admin, conn.workspace_id, r.orders, r.uncounted);
+  await admin.from("connection").update({ status: "active", last_sync_at: new Date().toISOString(), last_error: r.truncated ? "Imported the most recent 5,000 orders in this window; older ones were left out." : null }).eq("id", conn.id);
+  return { ok: true, campaigns: 0, rows: done.orders };
+}
+
 /** Every live Meta/Google connection, one after another, within a time budget. */
 export async function syncAll(admin: Admin, budgetMs = 240_000) {
   const started = Date.now();
-  const { data } = await admin.from("connection").select("id,workspace_id,platform,token_enc,status").in("platform", ["meta", "google"]).neq("status", "needs_reauth");
+  const { data } = await admin.from("connection").select("id,workspace_id,platform,token_enc,status").in("platform", ["meta", "google", "woocommerce"]).neq("status", "needs_reauth");
   const results: { platform: string; ok: boolean; rows?: number; error?: string }[] = [];
   let skipped = 0;
   for (const c of data ?? []) {

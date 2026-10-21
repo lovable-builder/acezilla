@@ -5,7 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revokeAtPlatform, syncConnection, type ConnRow } from "@/lib/sync";
 import { requireWriter } from "@/lib/workspace";
 
-const PLATFORMS = ["meta", "google"];
+const PLATFORMS = ["meta", "google", "woocommerce"];
+const LABEL: Record<string, string> = { meta: "Meta", google: "Google Ads", woocommerce: "WooCommerce" };
 const go = (qs: string) => redirect(`/connections?${qs}`);
 
 async function load(platform: string) {
@@ -23,7 +24,7 @@ export async function syncNow(formData: FormData) {
   try {
     const { admin, conn } = await load(String(formData.get("platform")));
     const r = await syncConnection(admin, conn);
-    qs = r.ok ? `notice=${encodeURIComponent(`Synced ${r.rows} daily rows from ${conn.platform === "meta" ? "Meta" : "Google Ads"}`)}` : `error=${encodeURIComponent(r.error)}`;
+    qs = r.ok ? `notice=${encodeURIComponent(conn.platform === "woocommerce" ? `Synced ${r.rows} orders from WooCommerce` : `Synced ${r.rows} daily rows from ${LABEL[conn.platform]}`)}` : `error=${encodeURIComponent(r.error)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Sync failed")}`;
   }
@@ -38,12 +39,16 @@ export async function disconnect(formData: FormData) {
     if (formData.get("confirm") !== "yes") throw new Error("Tick the box to confirm");
     const { admin, conn } = await load(String(formData.get("platform")));
     await revokeAtPlatform(conn.platform, conn.token_enc);
+    if (conn.platform === "woocommerce") {
+      const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "woo:%");
+      if (eo) throw new Error(eo.message);
+    }
     // ad_account -> campaign -> ad_group -> ad -> insight_daily all cascade.
     const { error: e1 } = await admin.from("ad_account").delete().eq("connection_id", conn.id);
     if (e1) throw new Error(e1.message);
     const { error: e2 } = await admin.from("connection").delete().eq("id", conn.id);
     if (e2) throw new Error(e2.message);
-    qs = `notice=${encodeURIComponent(`${conn.platform === "meta" ? "Meta" : "Google Ads"} disconnected. The stored login and imported data were deleted.`)}`;
+    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${conn.platform === "woocommerce" ? " To finish, delete the acezilla key in WooCommerce > Settings > Advanced > REST API." : ""}`)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not disconnect")}`;
   }

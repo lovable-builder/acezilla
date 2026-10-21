@@ -18,7 +18,7 @@ export default function Terms() {
       <h2>Your account</h2>
       <ul>
         <li>You must give accurate information and keep your login secure. You are responsible for activity under your account.</li>
-        <li>You may only connect accounts you are authorized to manage, and you must follow the terms of each platform you connect (Meta, Google, TikTok, Shopify).</li>
+        <li>You may only connect accounts you are authorized to manage, and you must follow the terms of each platform you connect (Meta, Google, TikTok, Shopify, WooCommerce).</li>
         <li>If you invite others to a workspace, you are responsible for what they do with it.</li>
       </ul>
 

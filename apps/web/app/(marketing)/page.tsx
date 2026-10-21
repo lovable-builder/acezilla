@@ -43,7 +43,7 @@ const STEPS = [
 ];
 const FAQ = [
   { q: "Will acezilla change my campaigns on its own?", a: "No. acezilla is suggest-only. Connections are read-only, and any change it proposes is a draft that a person has to approve first." },
-  { q: "Which platforms does it work with?", a: "Meta Ads, Google Ads and TikTok Ads for advertising data, and Shopify for store revenue." },
+  { q: "Which platforms does it work with?", a: "Meta Ads, Google Ads and TikTok Ads for advertising data, and Shopify or WooCommerce for store revenue." },
   { q: "Is my data safe?", a: "Platform logins are stored encrypted and used only on our servers. Each workspace's data is isolated from every other. You can disconnect a platform or ask us to delete your account at any time." },
   { q: "Who is it for?", a: "Founders and e-commerce owners who want a clear answer on where the next dollar should go, in-house marketers tired of juggling dashboards, and agencies managing several clients." },
   { q: "Can I choose which ad accounts it reads?", a: "Yes. You pick the accounts when you connect, and you can edit that selection or disconnect a platform at any time." },
@@ -238,7 +238,7 @@ export default function Landing() {
         <div className="lp-wrap">
           <Link href="/" className="lp-brand"><BrandMark size={30} /><span className="logo-word">acezilla</span></Link>
           <nav aria-label="Legal"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/data-deletion">Data deletion</Link>{CONTACT_EMAIL ? <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a> : null}</nav>
-          <p>© 2026 acezilla. Meta, Google, TikTok and Shopify are trademarks of their owners and are used only to identify the platforms acezilla connects to.</p>
+          <p>© 2026 acezilla. Meta, Google, TikTok, Shopify and WooCommerce are trademarks of their owners and are used only to identify the platforms acezilla connects to.</p>
         </div>
       </footer>
     </div>

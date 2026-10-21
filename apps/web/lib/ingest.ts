@@ -15,7 +15,7 @@ async function upsertIds(sb: SupabaseClient, table: string, rows: Record<string,
 }
 
 /** Writes a normalised Dataset into one workspace. Idempotent: re-running updates in place. */
-export async function ingestDataset(sb: SupabaseClient, workspaceId: string, platform: "mock" | "csv" | "meta" | "google", ds: Dataset) {
+export async function ingestDataset(sb: SupabaseClient, workspaceId: string, platform: "mock" | "csv" | "meta" | "google" | "woocommerce", ds: Dataset) {
   const now = new Date().toISOString();
   const { data: existing } = await sb.from("connection").select("id").eq("workspace_id", workspaceId).eq("platform", platform).limit(1);
   let connectionId = existing?.[0]?.id as string | undefined;
@@ -47,4 +47,18 @@ export async function ingestDataset(sb: SupabaseClient, workspaceId: string, pla
     if (error) throw new Error(`order: ${error.message}`);
   }
   return { insights: insights.length, orders: orders.length, campaigns: ds.campaigns.length };
+}
+
+/** Store orders from a connector: upserts the ones that count and removes any that stopped counting (cancelled, refunded). */
+export async function ingestOrders(sb: SupabaseClient, workspaceId: string, orders: Dataset["orders"], removeIds: string[]) {
+  const rows = orders.map((o) => ({ workspace_id: workspaceId, external_id: o.externalId, created_at: o.createdAt, revenue: o.revenue, customer_id: o.customerId || null, utm: o.utm, click_ids: o.clickIds }));
+  for (const part of chunks(rows)) {
+    const { error } = await sb.from("order").upsert(part, { onConflict: "workspace_id,external_id" });
+    if (error) throw new Error(`order: ${error.message}`);
+  }
+  for (const part of chunks(removeIds.map((id) => ({ id })))) {
+    const { error } = await sb.from("order").delete().eq("workspace_id", workspaceId).in("external_id", part.map((p) => p.id));
+    if (error) throw new Error(`order: ${error.message}`);
+  }
+  return { orders: rows.length, removed: removeIds.length };
 }
