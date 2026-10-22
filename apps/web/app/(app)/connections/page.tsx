@@ -63,7 +63,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
                 return (
                   <tr key={c.platform as string}>
                     <td style={{ textAlign: "left" }}><b style={{ fontWeight: 600 }}>{LABEL[c.platform as string] ?? c.platform}</b></td>
-                    <td style={{ textAlign: "left", color: h.color }}><span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: h.color, marginRight: 6 }} />{h.label}</td>
+                    <td style={{ textAlign: "left", color: h.color }}><span className={h.label === "Healthy" ? "pulse" : undefined} style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: h.color, marginRight: 6 }} />{h.label}</td>
                     <td style={{ textAlign: "left" }}>{c.last_sync_at ? ago(c.last_sync_at as string) : "Never"}</td>
                     <td style={{ textAlign: "left", whiteSpace: "normal" }}>{h.todo}</td>
                   </tr>
@@ -212,7 +212,7 @@ function Connector({ logo, name, desc, connected, lastSync, accounts = [], accou
           <b>{name}</b>
           {connected && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: problem ? "var(--neg)" : "var(--pos)", fontSize: 12, fontWeight: 600 }}>
-              <span style={{ width: 7, height: 7, borderRadius: 4, background: problem ? "var(--neg)" : "var(--pos)" }} />{problem ? "Needs attention" : "Connected"}
+              <span className={problem ? undefined : "pulse"} style={{ width: 7, height: 7, borderRadius: 4, background: problem ? "var(--neg)" : "var(--pos)" }} />{problem ? "Needs attention" : "Connected"}
             </span>
           )}
         </div>

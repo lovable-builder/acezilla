@@ -181,3 +181,11 @@ table.t th:first-child, table.t td:first-child { text-align: left; }
 .gadget { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
 .gadget:hover { border-color: var(--line2); }
 @media (prefers-reduced-motion: reduce) { .rise, .fadein { animation: none; } .draw { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; } }
+@keyframes az-ring { from { stroke-dasharray: 0 999; } }
+@keyframes az-grow { from { transform: scaleX(0); } }
+@keyframes az-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--pos) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+.ring-draw { animation: az-ring 1.1s cubic-bezier(.3,.8,.3,1) both; }
+.grow { transform-origin: left center; animation: az-grow .9s cubic-bezier(.3,.8,.3,1) both; animation-delay: calc(var(--i, 0) * 80ms); }
+.grow-r { transform-origin: right center; }
+.pulse { animation: az-pulse 2.2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ring-draw, .grow, .pulse { animation: none; } }

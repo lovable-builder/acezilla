@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
+import { buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { parsePeriod, parseSavedView } from "@/lib/period";
+import { loadProducts } from "@/lib/data";
 import { Term } from "@/components/app/term";
 import { Checklist } from "@/components/app/checklist";
 import { ClaimedVsReal, CountUp, RoasGauge, SpendDonut } from "@/components/dash/gadgets";
@@ -16,6 +17,43 @@ import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
 
 const PAGE = 1000;
 const tone = (good: boolean | null, dv: number | null) => dv === null || good === null ? "var(--ink3)" : (dv >= 0) === good ? "var(--pos)" : "var(--neg)";
+
+/** Listed products per connected store (sold vs not sold) and the best sellers, with a link to the full list. */
+function ProductsOverview({ rows, cur, stores }: { rows: ProductRow[]; cur: string; stores: string[] }) {
+  if (stores.length === 0) return null;
+  const top = rows.filter((r) => r.revenue > 0).slice(0, 5);
+  return (
+    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Products <span className="eyebrow" style={{ marginLeft: 8 }}>Listed in your stores</span></h2>
+        <Link href="/products" className="link" style={{ marginLeft: "auto" }}>See all products →</Link>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {stores.map((ch, i) => {
+            const listed = rows.filter((r) => r.channel === ch && r.listed), sold = listed.filter((r) => r.units > 0).length;
+            return (
+              <div key={ch}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><b style={{ fontWeight: 600 }}>{CHANNEL_LABEL[ch] ?? ch}</b><span className="mono tabnum" style={{ color: "var(--ink3)" }}>{listed.length === 0 ? "no products received yet" : `${sold} of ${listed.length} sold`}</span></div>
+                <div style={{ height: 10, borderRadius: 5, background: "var(--line)", overflow: "hidden", marginTop: 4 }}>
+                  <div className="grow" style={{ "--i": i, width: listed.length ? `${(sold / listed.length) * 100}%` : "0%", height: "100%", background: "var(--accent)", borderRadius: 5 } as React.CSSProperties} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Best sellers</div>
+          {top.length === 0 ? <p className="sub" style={{ margin: 0, fontSize: 13 }}>No product sales in this period.</p> : (
+            <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+              {top.map((r) => <li key={`${r.channel}|${r.productId}`} style={{ fontSize: 13 }}><span style={{ overflowWrap: "anywhere" }}>{r.name}</span> <span className="mono tabnum" style={{ color: "var(--ink3)" }}>· {CHANNEL_LABEL[r.channel] ?? r.channel} · {int(r.units)} sold · {money(r.revenue, cur)}</span></li>)}
+            </ol>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 const CHANNEL_LABEL: Record<string, string> = { woocommerce: "WooCommerce", allegro: "Allegro", shopify: "Shopify", other: "Other" };
 
@@ -157,6 +195,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     </Card>
   );
 
+  const productsFor = async (end: string, days: number): Promise<ProductRow[]> => (connectedStores.length ? (await loadProducts(supabase, current.id, shiftDate(end, -(days - 1)), end)).rows : []);
   const checklist = (
     <Checklist steps={[
       { title: "Connect your store", hint: "WooCommerce or Allegro. This is how acezilla sees real orders.", done: storeConns.length > 0, href: "/connections", cta: "Connect a store" },
@@ -168,6 +207,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   if (rows.length === 0 && orderRows.length > 0) {
     const cur0 = current.currency;
     const store0 = buildStoreSales(orderRows, { windowDays: period.windowDays, endDate: period.endDate });
+    const prod0 = await productsFor(store0.endDate, store0.windowDays);
     return (
       <>
         <PeriodBar path="/dashboard" active={period.days} custom={period.custom} compare={compare} />
@@ -180,6 +220,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         {checklist}
         {warningCard}
         <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: store0.windowDays, endDate: store0.endDate })} compare={compare} store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
+        <ProductsOverview rows={prod0} cur={cur0} stores={connectedStores} />
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ flex: 1, minWidth: 220 }}><b>Next: connect an ad platform.</b> Your store is connected, so this page already shows real sales. Add Meta or Google Ads to see what your ad spend returns.</span>
           <Button asChild><Link href="/connections">Connect an ad platform</Link></Button>
@@ -189,6 +230,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   }
 
   if (rows.length === 0) {
+    const prodE = await productsFor(period.endDate ?? new Date().toISOString().slice(0, 10), period.windowDays);
     return (
       <>
         <div>
@@ -198,6 +240,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         </div>
         {skippedCard}
         {connectedStores.length > 0 && <ChannelsCard cur={current.currency} channels={buildChannels([], { connected: connectedStores, windowDays: period.windowDays, endDate: period.endDate ?? new Date().toISOString().slice(0, 10) })} />}
+        <ProductsOverview rows={prodE} cur={current.currency} stores={connectedStores} />
         {checklist}
         <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <b>Two connections give you the full picture</b>
@@ -230,6 +273,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const attr = buildAttribution({ platforms: d.platforms, campaigns: d.campaigns, orders: inWindow, nonReporting: ["allegro"] });
   const { data: summaryRow } = await supabase.from("ai_summary").select("day,content").eq("workspace_id", current.id).eq("kind", "weekly").order("day", { ascending: false }).limit(1).maybeSingle();
   const summary = summaryRow && Date.now() - new Date(`${summaryRow.day}T00:00:00Z`).getTime() < 8 * 86400000 ? (summaryRow.content as { headline?: string; highlights?: string[]; watch?: string[]; nextSteps?: string[]; unverified?: string[]; error?: string }) : null;
+  const prodRows = await productsFor(d.endDate, d.windowDays);
   const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] });
 
   return (
@@ -312,6 +356,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       </div>
 
       {store ? <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={k.roas.value} compare={compare} /> : connectedStores.length > 0 && <ChannelsCard cur={cur} channels={buildChannels([], { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} />}
+      <ProductsOverview rows={prodRows} cur={cur} stores={connectedStores} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
         <Card>

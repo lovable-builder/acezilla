@@ -3,6 +3,7 @@ import { buildAttribution, buildDashboard } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PairBars, ProfitBars } from "@/components/dash/bars";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money, PLATFORM, x } from "@/lib/format";
 import { parsePeriod, periodQs, todayIso, windowStart } from "@/lib/period";
@@ -53,6 +54,11 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
       {attr.channels.length > 0 && (
         <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">01</span>Channels: platform says vs store earned</h2>
+          {attr.channels.some((c) => c.platformRoas !== null) && (
+            <Card>
+              <PairBars cur={cur} fmt={money} rows={attr.channels.filter((c) => c.platformRoas !== null).map((c) => ({ label: label(c.platform), a: { label: "Platform says", value: c.platformRevenue }, b: { label: "Store confirms", value: c.storeRevenue } }))} />
+            </Card>
+          )}
           <Card style={{ overflowX: "auto", padding: 0 }}>
             <table className="t tabnum" style={{ margin: 0 }}>
               <thead><tr><th style={{ textAlign: "left" }}>Channel</th><th>Ad spend</th><th>Platform revenue</th><th>Platform ROAS</th><th>Store revenue</th><th>Store ROAS</th><th>Over-claim</th></tr></thead>
@@ -121,6 +127,12 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
             <Button variant="outline" size="sm">Save</Button>
           </form>
 
+          {profit.offers.some((o) => o.profit !== null) && (
+            <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <h2 className="h2" style={{ margin: 0 }}>Profit per offer</h2>
+              <ProfitBars cur={cur} fmt={money} rows={profit.offers.filter((o) => o.profit !== null).slice(0, 12).map((o) => ({ label: o.name, value: o.profit as number }))} />
+            </Card>
+          )}
           <Card style={{ overflowX: "auto", padding: 0 }}>
             <table className="t tabnum" style={{ margin: 0 }}>
               <thead><tr><th style={{ textAlign: "left" }}>Offer</th><th>Units</th><th>Net sales</th><th>Fees</th><th>Ads</th><th>ACoS</th><th>Cost per unit</th><th>Profit</th><th>Break-even ACoS</th></tr></thead>
