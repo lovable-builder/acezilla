@@ -4,7 +4,7 @@ export function Sparkline({ data, color = "var(--accent)" }: { data: number[]; c
   const pts = data.map((v, i) => `${(i / Math.max(data.length - 1, 1)) * w},${h - 2 - ((v - min) / (max - min || 1)) * (h - 4)}`).join(" ");
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" pathLength={1} className="draw" />
     </svg>
   );
 }
@@ -18,9 +18,9 @@ export function RevenueChart({ series }: { series: { date: string; spend: number
   const area = `${line("revenue")} L${X(series.length - 1)},${H - pad.b} L${X(0)},${H - pad.b} Z`;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Revenue versus spend, last 30 days">
-      <path d={area} fill="var(--accent-soft)" />
-      <path d={line("revenue")} fill="none" stroke="var(--accent)" strokeWidth={2} />
-      <path d={line("spend")} fill="none" stroke="var(--ink3)" strokeWidth={1.5} strokeDasharray="4 4" />
+      <path d={area} fill="var(--accent-soft)" className="fadein" />
+      <path d={line("revenue")} fill="none" stroke="var(--accent)" strokeWidth={2} pathLength={1} className="draw" />
+      <path d={line("spend")} fill="none" stroke="var(--ink3)" strokeWidth={1.5} strokeDasharray="4 4" className="fadein" />
       {[0, Math.floor(series.length / 2), series.length - 1].map((i) => (
         <text key={i} x={X(i)} y={H - 6} fontSize={10} fill="var(--ink3)" textAnchor={i === 0 ? "start" : i === series.length - 1 ? "end" : "middle"} className="mono">
           {series[i]?.date.slice(5)}

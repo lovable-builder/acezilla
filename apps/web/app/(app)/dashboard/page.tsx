@@ -9,6 +9,7 @@ import { PeriodBar } from "@/components/dash/period-bar";
 import { parsePeriod, parseSavedView } from "@/lib/period";
 import { Term } from "@/components/app/term";
 import { Checklist } from "@/components/app/checklist";
+import { ClaimedVsReal, CountUp, RoasGauge, SpendDonut } from "@/components/dash/gadgets";
 import { ago } from "@/lib/format";
 import { generateWeeklySummary } from "./summary-actions";
 import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
@@ -190,11 +191,11 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const spendByDate = new Map(d.series.map((p) => [p.date, p.spend]));
   const roasUp = k.roas.deltaPct !== null && k.roas.deltaPct >= 0;
   const cells = [
-    { label: "Spend", v: money(k.spend.value, cur), d: k.spend.deltaPct, good: null, s: k.spend.series },
-    { label: "Revenue", v: money(k.revenue.value, cur), d: k.revenue.deltaPct, good: true, s: k.revenue.series },
-    { label: "Blended ROAS", v: x(k.roas.value), d: k.roas.deltaPct, good: true, s: k.roas.series },
-    { label: "CPA", v: k.conversions.value > 0 ? money(k.cpa.value, cur) : "—", d: k.cpa.deltaPct, good: false, s: k.cpa.series },
-    { label: "Conversions", v: int(k.conversions.value), d: k.conversions.deltaPct, good: true, s: k.conversions.series },
+    { label: "Spend", v: money(k.spend.value, cur), raw: k.spend.value, kind: "money" as const, d: k.spend.deltaPct, good: null, s: k.spend.series },
+    { label: "Revenue", v: money(k.revenue.value, cur), raw: k.revenue.value, kind: "money" as const, d: k.revenue.deltaPct, good: true, s: k.revenue.series },
+    { label: "Blended ROAS", v: x(k.roas.value), raw: k.roas.value, kind: "x" as const, d: k.roas.deltaPct, good: true, s: k.roas.series },
+    { label: "CPA", v: k.conversions.value > 0 ? money(k.cpa.value, cur) : "—", raw: k.conversions.value > 0 ? k.cpa.value : null, kind: "money" as const, d: k.cpa.deltaPct, good: false, s: k.cpa.series },
+    { label: "Conversions", v: int(k.conversions.value), raw: k.conversions.value, kind: "int" as const, d: k.conversions.deltaPct, good: true, s: k.conversions.series },
   ];
 
   const winStart = shiftDate(d.endDate, -(d.windowDays - 1));
@@ -220,6 +221,23 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <Sources ads={d.platforms.filter((p) => p.platform !== "allegro").map((p) => PLATFORM[p.platform]?.label ?? p.platform)} stores={storeNames} />
       {checklist}
       {warningCard}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
+        <div className="gadget rise" style={{ "--i": 0 } as React.CSSProperties}>
+          <h2 className="h2" style={{ margin: 0 }}><Term k="Store ROAS">Return on ad spend</Term></h2>
+          <RoasGauge real={store && k.spend.value > 0 ? storeRoas(store.revenue.value, k.spend.value) : null} claimed={k.roas.value} />
+        </div>
+        <div className="gadget rise" style={{ "--i": 1 } as React.CSSProperties}>
+          <h2 className="h2" style={{ margin: 0 }}>Where the money goes</h2>
+          <SpendDonut total={k.spend.value} cur={cur} parts={d.platforms.filter((p) => p.spend > 0).map((p) => ({ label: PLATFORM[p.platform]?.label ?? p.platform, value: p.spend, color: PLATFORM[p.platform]?.color ?? "var(--ink3)" }))} />
+        </div>
+        {store && (
+          <div className="gadget rise" style={{ "--i": 2 } as React.CSSProperties}>
+            <h2 className="h2" style={{ margin: 0 }}>Claimed vs real sales</h2>
+            <ClaimedVsReal claimed={k.revenue.value} real={store.revenue.value} cur={cur} />
+          </div>
+        )}
+      </div>
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -256,10 +274,10 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
 
       <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Ad performance <span className="eyebrow" style={{ marginLeft: 8 }}>As reported by the ad platforms</span></h2>
       <div className="kpis">
-        {cells.map((c) => (
-          <div className="kpi" key={c.label}>
+        {cells.map((c, i) => (
+          <div className="kpi rise" style={{ "--i": i } as React.CSSProperties} key={c.label}>
             <span className="eyebrow"><Term>{c.label}</Term></span>
-            <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.v}</span>
+            <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.raw === null ? c.v : <CountUp value={c.raw} kind={c.kind} cur={cur} />}</span>
             <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{compare ? delta(c.d) : " "}</span>
             <Sparkline data={c.s} color={c.good === null ? "var(--ink3)" : "var(--accent)"} />
           </div>
