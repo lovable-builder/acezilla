@@ -17,3 +17,9 @@ export const todayIso = () => new Date().toISOString().slice(0, 10);
 export const windowStart = (endDate: string, windowDays: number) => shiftDate(endDate, -(windowDays - 1));
 /** Query string that keeps the chosen period when a form posts back. */
 export const periodQs = (p: { days: number | null; custom: { from: string; to: string } | null }) => (p.custom ? `from=${p.custom.from}&to=${p.custom.to}` : `days=${p.days ?? 30}`);
+
+/** The view saved with "Save as default" (cookie "az_view" = "<days>.<1|0>"). Applied only when the URL names no period. */
+export function parseSavedView(raw: string | undefined): { days?: string; compare?: string } {
+  const m = /^(\d{1,3})\.([01])$/.exec(raw ?? "");
+  return m && (PRESETS as readonly number[]).includes(Number(m[1])) ? { days: m[1], compare: m[2] } : {};
+}

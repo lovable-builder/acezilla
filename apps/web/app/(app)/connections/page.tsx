@@ -52,6 +52,28 @@ export default async function Connections({ searchParams }: { searchParams: Prom
         <div style={{ fontSize: 14, color: verdict.ok ? "var(--pos)" : "var(--ink2)", fontWeight: verdict.ok ? 600 : 400 }}>{verdict.text}</div>
       </Card>
 
+      {(conns ?? []).length > 0 && (
+        <Card style={{ overflowX: "auto" }}>
+          <h2 className="h2"><span className="n">··</span>Data health</h2>
+          <table className="t">
+            <thead><tr><th style={{ textAlign: "left" }}>Source</th><th style={{ textAlign: "left" }}>Status</th><th style={{ textAlign: "left" }}>Last data</th><th style={{ textAlign: "left" }}>What to do</th></tr></thead>
+            <tbody>
+              {(conns ?? []).map((c) => {
+                const h = health(c.platform as string, c.status as string, c.last_sync_at as string | null, c.last_error as string | null);
+                return (
+                  <tr key={c.platform as string}>
+                    <td style={{ textAlign: "left" }}><b style={{ fontWeight: 600 }}>{LABEL[c.platform as string] ?? c.platform}</b></td>
+                    <td style={{ textAlign: "left", color: h.color }}><span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: h.color, marginRight: 6 }} />{h.label}</td>
+                    <td style={{ textAlign: "left" }}>{c.last_sync_at ? ago(c.last_sync_at as string) : "Never"}</td>
+                    <td style={{ textAlign: "left", whiteSpace: "normal" }}>{h.todo}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 24, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
           <Section n="1" title="Ad platforms" feeds="Feeds: spend, clicks, conversions and the ROAS each platform reports.">
@@ -144,6 +166,19 @@ export default async function Connections({ searchParams }: { searchParams: Prom
       </div>
     </>
   );
+}
+
+/** How fresh and healthy a connection is. Ad platforms sync daily; WooCommerce pushes when the store changes, so quiet is normal for longer. */
+function health(platform: string, status: string, lastSync: string | null, lastError: string | null) {
+  const OK = "var(--pos)", WARN = "var(--warn)", BAD = "var(--neg)";
+  if (status === "needs_reauth") return { label: "Login expired", color: BAD, todo: "Reconnect so syncing can continue." };
+  if (status === "error") return { label: "Sync failing", color: BAD, todo: lastError ? `${lastError}` : "Try Sync now. If it keeps failing, reconnect." };
+  if (lastError) return { label: "Needs a look", color: WARN, todo: lastError };
+  if (!lastSync) return { label: "Waiting for data", color: WARN, todo: platform === "woocommerce" ? "Open the acezilla plugin in WordPress and check that it is paired." : "Press Sync now." };
+  const hours = (Date.now() - new Date(lastSync).getTime()) / 3600000;
+  const limit = platform === "woocommerce" ? 24 * 7 : 36;
+  if (hours > limit) return { label: "Stale", color: WARN, todo: platform === "woocommerce" ? "No orders received for a week. Normal for a quiet store; otherwise check the plugin." : "Data is more than a day and a half old. Press Sync now." };
+  return { label: "Healthy", color: OK, todo: "Nothing to do." };
 }
 
 function Section({ n, title, feeds, children }: { n: string; title: string; feeds: string; children: React.ReactNode }) {

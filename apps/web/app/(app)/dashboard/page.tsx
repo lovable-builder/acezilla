@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { buildAttribution, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { PeriodBar } from "@/components/dash/period-bar";
-import { parsePeriod } from "@/lib/period";
+import { parsePeriod, parseSavedView } from "@/lib/period";
+import { Term } from "@/components/app/term";
+import { Checklist } from "@/components/app/checklist";
 import { ago } from "@/lib/format";
 import { generateWeeklySummary } from "./summary-actions";
 import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
@@ -13,7 +16,7 @@ import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
 const PAGE = 1000;
 const tone = (good: boolean | null, dv: number | null) => dv === null || good === null ? "var(--ink3)" : (dv >= 0) === good ? "var(--pos)" : "var(--neg)";
 
-function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas }: { store: StoreSales; cur: string; spendByDate: Map<string, number> | null; adSpend: number | null; platformRoas: number | null }) {
+function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare }: { compare: boolean; store: StoreSales; cur: string; spendByDate: Map<string, number> | null; adSpend: number | null; platformRoas: number | null }) {
   const sRoas = adSpend ? storeRoas(store.revenue.value, adSpend) : null;
   const cells = [
     { label: "Store revenue", v: money(store.revenue.value, cur), d: store.revenue.deltaPct, good: true as boolean | null, s: store.revenue.series },
@@ -28,11 +31,11 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas }: { store:
       <div className="kpis">
         {cells.map((c) => (
           <div className="kpi" key={c.label}>
-            <span className="eyebrow">{c.label}</span>
+            <span className="eyebrow"><Term>{c.label}</Term></span>
             <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.v}</span>
             {c.label === "Store ROAS"
               ? <span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{x(platformRoas)} platform-reported</span>
-              : <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{delta(c.d)}</span>}
+              : <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{compare ? delta(c.d) : " "}</span>}
             {c.s.length > 0 && <Sparkline data={c.s} color="var(--accent)" />}
           </div>
         ))}
@@ -77,8 +80,11 @@ function Sources({ ads, stores }: { ads: string[]; stores: string[] }) {
   );
 }
 
-export default async function CommandCenter({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string }> }) {
-  const period = parsePeriod(await searchParams);
+export default async function CommandCenter({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string; compare?: string }> }) {
+  const sp = await searchParams;
+  const saved = sp.days || sp.from || sp.to ? {} : parseSavedView((await cookies()).get("az_view")?.value);
+  const period = parsePeriod({ ...sp, ...saved });
+  const compare = (sp.compare ?? saved.compare) !== "0";
   const { supabase, current } = await getWorkspaceContext();
   if (!current) return <Card>No workspace found for this account.</Card>;
 
@@ -102,8 +108,10 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     for (const r of data ?? []) orderRows.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
     if ((data?.length ?? 0) < PAGE) break;
   }
-  const { data: storeConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id).in("platform", ["woocommerce", "allegro", "shopify"]);
-  const storeNames = (storeConns ?? []).map((c) => PLATFORM[c.platform as string]?.label ?? (c.platform as string).replace(/^./, (m) => m.toUpperCase()));
+  const { data: allConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id);
+  const storeConns = (allConns ?? []).filter((c) => ["woocommerce", "allegro", "shopify"].includes(c.platform as string));
+  const adsConnected = (allConns ?? []).some((c) => ["meta", "google", "tiktok"].includes(c.platform as string));
+  const storeNames = storeConns.map((c) => PLATFORM[c.platform as string]?.label ?? (c.platform as string).replace(/^./, (m) => m.toUpperCase()));
   const { data: wooConn } = await supabase.from("connection").select("last_error,stats").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
   const currencyWarning = (wooConn?.last_error as string | null)?.startsWith("Your store sells in") ? (wooConn!.last_error as string) : null;
   const skippedMap = ((wooConn?.stats as { skipped_orders?: Record<string, string> } | null)?.skipped_orders) ?? {};
@@ -122,20 +130,29 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     </Card>
   );
 
+  const checklist = (
+    <Checklist steps={[
+      { title: "Connect your store", hint: "WooCommerce or Allegro. This is how acezilla sees real orders.", done: storeConns.length > 0, href: "/connections", cta: "Connect a store" },
+      { title: "Connect an ad platform", hint: "Meta or Google Ads. This brings in your spend and campaigns.", done: adsConnected, href: "/connections", cta: "Connect ads" },
+      { title: "Make sure the currency matches", hint: currencyWarning ?? "Your store and ad accounts should use the same currency.", done: !currencyWarning && (storeConns.length > 0 || adsConnected), href: "/connections/woocommerce", cta: "Fix currency" },
+    ]} />
+  );
+
   if (rows.length === 0 && orderRows.length > 0) {
     const cur0 = current.currency;
     const store0 = buildStoreSales(orderRows, { windowDays: period.windowDays, endDate: period.endDate });
     return (
       <>
-        <PeriodBar path="/dashboard" active={period.days} custom={period.custom} />
+        <PeriodBar path="/dashboard" active={period.days} custom={period.custom} compare={compare} />
         <div>
           <div className="eyebrow">Overview · last {store0.windowDays} days to {store0.endDate}</div>
           <h1 className="page">Your store made {money(store0.revenue.value, cur0)} from {int(store0.orders.value)} order{store0.orders.value === 1 ? "" : "s"}.</h1>
           <p className="sub">Connect an ad account to see how your ad spend compares with this revenue.</p>
         </div>
         <Sources ads={[]} stores={storeNames} />
+        {checklist}
         {warningCard}
-        <StoreBlock store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
+        <StoreBlock compare={compare} store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ flex: 1, minWidth: 220 }}><b>Next: connect an ad platform.</b> Your store is connected, so this page already shows real sales. Add Meta or Google Ads to see what your ad spend returns.</span>
           <Button asChild><Link href="/connections">Connect an ad platform</Link></Button>
@@ -153,6 +170,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
           <p className="sub">Connect an ad account or your store to get your first briefing.</p>
         </div>
         {skippedCard}
+        {checklist}
         <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <b>Two connections give you the full picture</b>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
@@ -188,18 +206,19 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <PeriodBar path="/dashboard" active={period.days} custom={period.custom} />
+      <PeriodBar path="/dashboard" active={period.days} custom={period.custom} compare={compare} />
       <div>
         <div className="eyebrow">Overview · last {d.windowDays} days to {d.endDate}</div>
         <h1 className="page">
           You spent {money(k.spend.value, cur)} and made {money(k.revenue.value, cur)}
-          {k.roas.deltaPct === null
+          {k.roas.deltaPct === null || !compare
             ? ` — blended ROAS is ${x(k.roas.value)}.`
             : ` — ROAS is ${roasUp ? "up" : "down"} ${delta(k.roas.deltaPct).replace(/^[+−]/, "")} on the previous period.`}
         </h1>
         <p className="sub">{store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
       </div>
       <Sources ads={d.platforms.filter((p) => p.platform !== "allegro").map((p) => PLATFORM[p.platform]?.label ?? p.platform)} stores={storeNames} />
+      {checklist}
       {warningCard}
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -239,15 +258,15 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <div className="kpis">
         {cells.map((c) => (
           <div className="kpi" key={c.label}>
-            <span className="eyebrow">{c.label}</span>
+            <span className="eyebrow"><Term>{c.label}</Term></span>
             <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.v}</span>
-            <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{delta(c.d)}</span>
+            <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{compare ? delta(c.d) : " "}</span>
             <Sparkline data={c.s} color={c.good === null ? "var(--ink3)" : "var(--accent)"} />
           </div>
         ))}
       </div>
 
-      {store && <StoreBlock store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={k.roas.value} />}
+      {store && <StoreBlock store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={k.roas.value} compare={compare} />}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
         <Card>
@@ -291,7 +310,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <Card style={{ overflowX: "auto" }}>
         <h2 className="h2"><span className="n">04</span>Campaigns</h2>
         <table className="t tabnum">
-          <thead><tr><th>Campaign</th><th>Spend</th><th>Platform ROAS</th><th>Modeled ROAS</th><th>CPA</th><th>Status</th></tr></thead>
+          <thead><tr><th>Campaign</th><th>Spend</th><th><Term>Platform ROAS</Term></th><th><Term>Modeled ROAS</Term></th><th><Term>CPA</Term></th><th>Status</th></tr></thead>
           <tbody>
             {d.campaigns.map((c) => (
               <tr key={c.campaignId}>
