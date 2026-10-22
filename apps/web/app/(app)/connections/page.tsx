@@ -7,7 +7,6 @@ import { ago } from "@/lib/format";
 import { syncNow } from "./connection-actions";
 import { allegroEnv } from "@/lib/allegro";
 
-const STEPS = ["Workspace", "Connect accounts", "Goals & KPIs", "Historical import"];
 const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
 
 export default async function Connections({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
@@ -26,107 +25,153 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const allegro = conn("allegro");
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+  const adsOn = ["meta", "google", "tiktok"].filter((p) => conn(p));
+  const storesOn = ["woocommerce", "allegro", "shopify"].filter((p) => conn(p));
+  const LABEL: Record<string, string> = { meta: "Meta", google: "Google", tiktok: "TikTok", woocommerce: "WooCommerce", allegro: "Allegro", shopify: "Shopify" };
+  const list = (ids: string[]) => ids.map((i) => LABEL[i]).join(", ");
+  const verdict = adsOn.length && storesOn.length ? { ok: true, text: `Real ROAS is on. ${list(adsOn)} spend is compared with orders from ${list(storesOn)}.` }
+    : adsOn.length ? { ok: false, text: `${list(adsOn)} connected. Add a store to see what your ads really earn.` }
+    : storesOn.length ? { ok: false, text: `${list(storesOn)} connected. Add an ad platform to see spend and real ROAS.` }
+    : { ok: false, text: "Connect one ad platform and one store. That is all it takes to see real ROAS." };
+
   return (
     <>
       <div>
-        <div className="eyebrow">Step 2 of 4 · Connect accounts</div>
-        <h1 className="page">Bring in your ad data</h1>
-        <p className="sub">Connect your ad platforms. Everything is read-only.</p>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-        {STEPS.map((s, i) => <div key={s} title={s} style={{ height: 3, borderRadius: 2, background: i < 2 ? "var(--accent)" : "var(--line2)" }} />)}
+        <div className="eyebrow">Workspace · {current?.name ?? ""}</div>
+        <h1 className="page">Connections</h1>
+        <p className="sub">Ads tell you what you spent. Your store tells you what you earned. Connect both and acezilla shows the real return. Everything is read-only.</p>
       </div>
       {error && <Card style={{ color: "var(--neg)" }}>{error}</Card>}
       {notice && <Card style={{ color: "var(--pos)" }}>{notice}</Card>}
 
+      <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+          <Step n="1" title="Ad platforms" sub="Where the money goes" done={adsOn.length > 0} detail={adsOn.length ? list(adsOn) : "Not connected"} />
+          <Step n="2" title="Store or marketplace" sub="What actually sold" done={storesOn.length > 0} detail={storesOn.length ? list(storesOn) : "Not connected"} />
+        </div>
+        <div style={{ fontSize: 14, color: verdict.ok ? "var(--pos)" : "var(--ink2)", fontWeight: verdict.ok ? 600 : 400 }}>{verdict.text}</div>
+      </Card>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 24, alignItems: "start" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {(["meta", "google"] as const).map((id) => {
-            const c = conn(id);
-            const ready = id === "meta" ? metaReady : googleReady;
-            const label = id === "meta" ? "Meta" : "Google";
-            const daysLeft = c?.token_expires_at ? Math.floor((new Date(c.token_expires_at as string).getTime() - Date.now()) / 86400000) : null;
-            const broken = c && (c.status === "error" || c.status === "needs_reauth");
-            return (
-              <Connector
-                key={id}
-                logo={<BrandLogo brand={id} />}
-                name={id === "meta" ? "Meta Ads" : "Google Ads"}
-                desc={id === "meta" ? "Facebook and Instagram campaigns" : "Search, Shopping and Performance Max"}
-                connected={!!c} lastSync={c?.last_sync_at as string | undefined} accounts={names(id)}
-                problem={broken ? (c.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : `Sync failed: ${c.last_error ?? "unknown error"}`) : undefined}
-                warning={!broken && daysLeft !== null && daysLeft <= 10 ? `Login expires in ${Math.max(daysLeft, 0)} day${daysLeft === 1 ? "" : "s"}. Reconnect to renew.` : undefined}
-                action={
-                  c ? (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {c.status === "needs_reauth" || (daysLeft !== null && daysLeft <= 10)
-                        ? <Button asChild><a href={`/api/connect/${id}/start`}>Reconnect</a></Button> : null}
-                      <form action={syncNow}><input type="hidden" name="platform" value={id} /><Button variant="ghost">Sync now</Button></form>
-                      <Button asChild variant="outline"><Link href={`/connections/${id}`}>Edit accounts</Link></Button>
-                    </div>
-                  ) : ready ? <Button asChild><a href={`/api/connect/${id}/start`}>Connect {label}</a></Button>
-                  : <Button variant="outline" disabled title={`Add the ${label} secrets`}>Not configured</Button>
-                }
-              />
-            );
-          })}
-          <Connector
-            logo={<BrandLogo brand="tiktok" />} name="TikTok Ads" desc="Campaigns, spend and creative metrics"
-            connected={false} action={<Button variant="outline" disabled title="Waiting for TikTok to approve our app">Pending approval</Button>}
-          />
-          <Connector
-            logo={<BrandLogo brand="woocommerce" />} name="WooCommerce" desc="Orders from your WordPress store, for modeled ROAS. Installs as a plugin."
-            connected={!!woo} lastSync={woo?.last_sync_at as string | undefined} accounts={woo?.external_user_id ? [woo.external_user_id as string] : []}
-            warning={woo?.last_error ? (woo.last_error as string) : undefined}
-            action={<Button asChild variant={woo ? "outline" : "solid"}><Link href="/connections/woocommerce">{woo ? ((woo.last_error as string | null)?.startsWith("Your store sells in") ? "Fix currency" : "Manage") : "Set up"}</Link></Button>}
-          />
-          <Connector
-            logo={<BrandLogo brand="allegro" />} name="Allegro" desc="Orders, ad costs and fees from your Allegro seller account"
-            connected={!!allegro} lastSync={allegro?.last_sync_at as string | undefined} accounts={allegro?.external_user_id ? [allegro.external_user_id as string] : []}
-            problem={allegro?.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : allegro?.status === "error" ? `Sync failed: ${allegro.last_error ?? "unknown error"}` : undefined}
-            warning={allegro && allegro.status === "active" && allegro.last_error ? (allegro.last_error as string) : undefined}
-            action={
-              allegro ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {allegro.status === "needs_reauth" ? <Button asChild><a href="/api/connect/allegro/start">Reconnect</a></Button> : null}
-                  <form action={syncNow}><input type="hidden" name="platform" value="allegro" /><Button variant="ghost">Sync now</Button></form>
-                  <Button asChild variant="outline"><Link href="/connections/allegro">Details</Link></Button>
-                </div>
-              ) : allegroEnv().ready ? <Button asChild><a href="/api/connect/allegro/start">Connect Allegro</a></Button>
-              : <Button variant="outline" disabled title="Add the Allegro client ID and secret">Not configured</Button>
-            }
-          />
-          <Connector
-            logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for modeled ROAS"
-            connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
-          />
-          <Connector
-            logo={<BrandLogo brand="ga4" />} name="Google Analytics 4" desc="Sessions and on-site conversions"
-            connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
-          />
+        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          <Section n="1" title="Ad platforms" feeds="Feeds: spend, clicks, conversions and the ROAS each platform reports.">
+            {(["meta", "google"] as const).map((id) => {
+              const c = conn(id);
+              const ready = id === "meta" ? metaReady : googleReady;
+              const label = id === "meta" ? "Meta" : "Google";
+              const daysLeft = c?.token_expires_at ? Math.floor((new Date(c.token_expires_at as string).getTime() - Date.now()) / 86400000) : null;
+              const broken = c && (c.status === "error" || c.status === "needs_reauth");
+              return (
+                <Connector
+                  key={id}
+                  logo={<BrandLogo brand={id} />}
+                  name={id === "meta" ? "Meta Ads" : "Google Ads"}
+                  desc={id === "meta" ? "Facebook and Instagram campaigns" : "Search, Shopping and Performance Max"}
+                  connected={!!c} lastSync={c?.last_sync_at as string | undefined} accounts={names(id)} accountWord="ad account"
+                  problem={broken ? (c.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : `Sync failed: ${c.last_error ?? "unknown error"}`) : undefined}
+                  warning={!broken && daysLeft !== null && daysLeft <= 10 ? `Login expires in ${Math.max(daysLeft, 0)} day${daysLeft === 1 ? "" : "s"}. Reconnect to renew.` : undefined}
+                  action={
+                    c ? (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {c.status === "needs_reauth" || (daysLeft !== null && daysLeft <= 10)
+                          ? <Button asChild><a href={`/api/connect/${id}/start`}>Reconnect</a></Button> : null}
+                        <form action={syncNow}><input type="hidden" name="platform" value={id} /><Button variant="ghost">Sync now</Button></form>
+                        <Button asChild variant="outline"><Link href={`/connections/${id}`}>Choose accounts</Link></Button>
+                      </div>
+                    ) : ready ? <Button asChild><a href={`/api/connect/${id}/start`}>Connect {label}</a></Button>
+                    : <Button variant="outline" disabled title={`Add the ${label} secrets`}>Not configured</Button>
+                  }
+                />
+              );
+            })}
+            <Connector
+              logo={<BrandLogo brand="tiktok" />} name="TikTok Ads" desc="Campaigns, spend and creative metrics"
+              connected={false} action={<Button variant="outline" disabled title="Waiting for TikTok to approve our app">Pending approval</Button>}
+            />
+          </Section>
+
+          <Section n="2" title="Stores and marketplaces" feeds="Feeds: real orders and revenue. This is what makes ROAS honest, because it counts sales, not clicks.">
+            <Connector
+              logo={<BrandLogo brand="woocommerce" />} name="WooCommerce" desc="Your WordPress store. Install our plugin, paste a code, done."
+              connected={!!woo} lastSync={woo?.last_sync_at as string | undefined} accounts={woo?.external_user_id ? [woo.external_user_id as string] : []} accountWord="store"
+              warning={woo?.last_error ? (woo.last_error as string) : undefined}
+              action={<Button asChild variant={woo ? "outline" : "solid"}><Link href="/connections/woocommerce">{woo ? ((woo.last_error as string | null)?.startsWith("Your store sells in") ? "Fix currency" : "Manage") : "Set up"}</Link></Button>}
+            />
+            <Connector
+              logo={<BrandLogo brand="allegro" />} name="Allegro" desc="Orders, ad costs and fees from your seller account"
+              connected={!!allegro} lastSync={allegro?.last_sync_at as string | undefined} accounts={allegro?.external_user_id ? [allegro.external_user_id as string] : []} accountWord="seller account"
+              problem={allegro?.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : allegro?.status === "error" ? `Sync failed: ${allegro.last_error ?? "unknown error"}` : undefined}
+              warning={allegro && allegro.status === "active" && allegro.last_error ? (allegro.last_error as string) : undefined}
+              action={
+                allegro ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {allegro.status === "needs_reauth" ? <Button asChild><a href="/api/connect/allegro/start">Reconnect</a></Button> : null}
+                    <form action={syncNow}><input type="hidden" name="platform" value="allegro" /><Button variant="ghost">Sync now</Button></form>
+                    <Button asChild variant="outline"><Link href="/connections/allegro">Details</Link></Button>
+                  </div>
+                ) : allegroEnv().ready ? <Button asChild><a href="/api/connect/allegro/start">Connect Allegro</a></Button>
+                : <Button variant="outline" disabled title="Add the Allegro client ID and secret">Not configured</Button>
+              }
+            />
+            <Connector
+              logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for real ROAS"
+              connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
+            />
+          </Section>
+
+          <Section n="3" title="Analytics" feeds="Feeds: on-site sessions and conversions. Optional.">
+            <Connector
+              logo={<BrandLogo brand="ga4" />} name="Google Analytics 4" desc="Sessions and on-site conversions"
+              connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
+            />
+          </Section>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <Card>
-            <b>What we'll import</b>
-            <ul className="sub" style={{ fontSize: 14, paddingLeft: 18, listStyle: "disc" }}>
-              <li>Campaigns, ad sets, ads and creatives</li>
-              <li>Daily spend, impressions, clicks, conversions, revenue</li>
-              <li>Store orders, for modeled ROAS (next phase)</li>
-            </ul>
+            <b>How it fits together</b>
+            <ol className="sub" style={{ fontSize: 14, paddingLeft: 18, margin: "8px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
+              <li><b>Ad platforms</b> say how much you spent and how much they think they earned. Each one counts its own sales, so the totals are usually too high.</li>
+              <li><b>Your store</b> knows which orders really happened and where each customer came from.</li>
+              <li><b>acezilla</b> puts them side by side. That gives you Store ROAS, the return on your ad spend measured against real orders.</li>
+            </ol>
           </Card>
           <div style={{ background: "var(--accent-soft)", color: "var(--accent-ink)", borderRadius: 10, padding: 16, fontSize: 14 }}>
-            <b>Suggest-only.</b> acezilla reads your data. Nothing changes in a live campaign until a person approves it.
+            <b>Suggest-only.</b> acezilla only reads your data. Nothing changes in a live campaign until a person approves it.
           </div>
-          <Button asChild><Link href="/dashboard">Continue to dashboard →</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard">Open the command center →</Link></Button>
         </div>
       </div>
     </>
   );
 }
 
-function Connector({ logo, name, desc, connected, lastSync, accounts = [], action, problem, warning }: {
-  logo: React.ReactNode; name: string; desc: string; connected: boolean; lastSync?: string; accounts?: string[]; action: React.ReactNode; problem?: string; warning?: string;
+function Section({ n, title, feeds, children }: { n: string; title: string; feeds: string; children: React.ReactNode }) {
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div>
+        <h2 className="h2" style={{ margin: 0 }}><span className="n">{n}</span>{title}</h2>
+        <p className="sub" style={{ margin: "2px 0 0", fontSize: 13 }}>{feeds}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Step({ n, title, sub, done, detail }: { n: string; title: string; sub: string; done: boolean; detail: string }) {
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center", border: "1px solid var(--line)", borderRadius: 12, padding: 12 }}>
+      <span style={{ width: 28, height: 28, borderRadius: 14, flexShrink: 0, display: "grid", placeItems: "center", fontSize: 13, fontWeight: 600, background: done ? "var(--pos)" : "var(--line2)", color: done ? "var(--surface)" : "var(--ink2)" }}>{done ? "✓" : n}</span>
+      <div style={{ minWidth: 0 }}>
+        <div><b style={{ fontWeight: 600 }}>{title}</b> <span className="sub" style={{ fontSize: 12 }}>· {sub}</span></div>
+        <div style={{ fontSize: 13, color: done ? "var(--pos)" : "var(--ink3)" }}>{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function Connector({ logo, name, desc, connected, lastSync, accounts = [], accountWord = "account", action, problem, warning }: {
+  logo: React.ReactNode; name: string; desc: string; connected: boolean; lastSync?: string; accounts?: string[]; accountWord?: string; action: React.ReactNode; problem?: string; warning?: string;
 }) {
   return (
     <Card
@@ -146,8 +191,8 @@ function Connector({ logo, name, desc, connected, lastSync, accounts = [], actio
         <div className="sub" style={{ margin: 0, fontSize: 13 }}>
           {connected
             ? accounts.length > 0
-              ? `${accounts.length} account${accounts.length === 1 ? "" : "s"}: ${accounts.join(", ")}${lastSync ? ` · synced ${ago(lastSync)}` : ""}`
-              : lastSync ? `Synced ${ago(lastSync)}` : "No accounts selected yet. Click Edit accounts."
+              ? `${accounts.length} ${accountWord}${accounts.length === 1 ? "" : "s"}: ${accounts.join(", ")}${lastSync ? ` · synced ${ago(lastSync)}` : ""}`
+              : lastSync ? `Synced ${ago(lastSync)}` : "No accounts selected yet. Click Choose accounts."
             : desc}
         </div>
         {problem && <div style={{ fontSize: 13, color: "var(--neg)", marginTop: 2 }}>{problem}</div>}

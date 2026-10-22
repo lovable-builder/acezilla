@@ -12,7 +12,7 @@ export default function DataDeletion() {
       <h2>1. Disconnect a platform (instant)</h2>
       <ol style={{ paddingLeft: 20, listStyle: "decimal" }}>
         <li>Sign in to acezilla and open <b>Connections</b>.</li>
-        <li>On the platform card (Meta Ads or Google Ads), click <b>Edit accounts</b>. For WooCommerce or Allegro, open its page and use <b>Disconnect</b>.</li>
+        <li>On the platform card (Meta Ads or Google Ads), click <b>Choose accounts</b>. For WooCommerce or Allegro, open its page and use <b>Disconnect</b>.</li>
         <li>At the bottom, tick the confirmation box and click <b>Disconnect</b>.</li>
       </ol>
       <p>This immediately deletes the stored login and every ad account, campaign, metric and order imported from that platform, and asks the platform to revoke our access (for WooCommerce, also deactivate the acezilla plugin in WordPress).</p>

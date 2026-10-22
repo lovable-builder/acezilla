@@ -47,6 +47,7 @@ body {
 .nav-item.active {
   background: var(--surface); box-shadow: 0 0 0 1px var(--line); color: var(--ink); font-weight: 600;
 }
+.nav-soon { margin-left: auto; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink3); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
 .nav-dot { width: 6px; height: 6px; border-radius: 3px; background: var(--accent); }
 .topbar {
   position: sticky; top: 0; z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;

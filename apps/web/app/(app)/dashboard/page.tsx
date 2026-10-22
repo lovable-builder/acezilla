@@ -24,7 +24,7 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas }: { store:
   const chart = store.series.map((p) => ({ date: p.date, revenue: p.revenue, spend: spendByDate?.get(p.date) ?? 0 }));
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Store sales</h2>
+      <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Store sales <span className="eyebrow" style={{ marginLeft: 8 }}>Real orders from your store</span></h2>
       <div className="kpis">
         {cells.map((c) => (
           <div className="kpi" key={c.label}>
@@ -60,6 +60,23 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas }: { store:
   );
 }
 
+function Sources({ ads, stores }: { ads: string[]; stores: string[] }) {
+  const chip = (label: string, names: string[], href: string, hint: string) => (
+    <Link href={href} style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid var(--line)", borderRadius: 999, padding: "4px 12px", fontSize: 13, background: "var(--surface)" }}>
+      <span style={{ width: 7, height: 7, borderRadius: 4, background: names.length ? "var(--pos)" : "var(--line2)" }} />
+      <span className="eyebrow">{label}</span>
+      <span style={{ color: names.length ? "var(--ink)" : "var(--ink3)" }}>{names.length ? names.join(", ") : hint}</span>
+    </Link>
+  );
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      {chip("Ads", ads, "/connections", "No ad platform yet")}
+      {chip("Store", stores, "/connections", "No store yet")}
+      <Link href="/connections" className="eyebrow" style={{ color: "var(--accent-ink)" }}>Manage connections</Link>
+    </div>
+  );
+}
+
 export default async function CommandCenter({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string }> }) {
   const period = parsePeriod(await searchParams);
   const { supabase, current } = await getWorkspaceContext();
@@ -85,6 +102,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     for (const r of data ?? []) orderRows.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
     if ((data?.length ?? 0) < PAGE) break;
   }
+  const { data: storeConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id).in("platform", ["woocommerce", "allegro", "shopify"]);
+  const storeNames = (storeConns ?? []).map((c) => PLATFORM[c.platform as string]?.label ?? (c.platform as string).replace(/^./, (m) => m.toUpperCase()));
   const { data: wooConn } = await supabase.from("connection").select("last_error,stats").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
   const currencyWarning = (wooConn?.last_error as string | null)?.startsWith("Your store sells in") ? (wooConn!.last_error as string) : null;
   const skippedMap = ((wooConn?.stats as { skipped_orders?: Record<string, string> } | null)?.skipped_orders) ?? {};
@@ -114,11 +133,12 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
           <h1 className="page">Your store made {money(store0.revenue.value, cur0)} from {int(store0.orders.value)} order{store0.orders.value === 1 ? "" : "s"}.</h1>
           <p className="sub">Connect an ad account to see how your ad spend compares with this revenue.</p>
         </div>
+        <Sources ads={[]} stores={storeNames} />
         {warningCard}
         <StoreBlock store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span>No ad data yet.</span>
-          <Button asChild><Link href="/connections">Connect an ad account</Link></Button>
+          <span style={{ flex: 1, minWidth: 220 }}><b>Next: connect an ad platform.</b> Your store is connected, so this page already shows real sales. Add Meta or Google Ads to see what your ad spend returns.</span>
+          <Button asChild><Link href="/connections">Connect an ad platform</Link></Button>
         </Card>
       </>
     );
@@ -133,9 +153,13 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
           <p className="sub">Connect an ad account or your store to get your first briefing.</p>
         </div>
         {skippedCard}
-        <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span>Nothing synced yet.</span>
-          <Button asChild><Link href="/connections">Connect an account</Link></Button>
+        <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <b>Two connections give you the full picture</b>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
+            <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}><div className="eyebrow">1 · Ad platform</div><div className="sub" style={{ margin: "4px 0 0", fontSize: 13 }}>Meta or Google Ads. Shows what you spend and what the platforms report.</div></div>
+            <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}><div className="eyebrow">2 · Store or marketplace</div><div className="sub" style={{ margin: "4px 0 0", fontSize: 13 }}>WooCommerce or Allegro. Shows real orders, so ROAS is measured on sales that happened.</div></div>
+          </div>
+          <div><Button asChild><Link href="/connections">Go to Connections</Link></Button></div>
         </Card>
       </>
     );
@@ -175,6 +199,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         </h1>
         <p className="sub">{store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
       </div>
+      <Sources ads={d.platforms.filter((p) => p.platform !== "allegro").map((p) => PLATFORM[p.platform]?.label ?? p.platform)} stores={storeNames} />
       {warningCard}
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -210,6 +235,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         )}
       </Card>
 
+      <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Ad performance <span className="eyebrow" style={{ marginLeft: 8 }}>As reported by the ad platforms</span></h2>
       <div className="kpis">
         {cells.map((c) => (
           <div className="kpi" key={c.label}>

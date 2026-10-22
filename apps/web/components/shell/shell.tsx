@@ -42,6 +42,7 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
                   <Link key={i.href} href={i.href} className={`nav-item${active ? " active" : ""}`}>
                     {active && <span className="nav-dot" />}
                     {i.name}
+                    {"soon" in i && i.soon && <span className="nav-soon">Soon</span>}
                   </Link>
                 );
               })}
@@ -57,7 +58,7 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" /></svg>
           </button>
           <Link href="/" className="link" title="Back to the acezilla website">← Website</Link>
-          <span className="badge">Suggest-only</span>
+          <span className="badge" title="acezilla only reads your accounts. Nothing changes in a live campaign until a person approves it.">Suggest-only</span>
           {email && <span className="eyebrow" title="Signed in as">{email}</span>}
           <form action="/auth/signout" method="post"><button className="link">Sign out</button></form>
         </header>
