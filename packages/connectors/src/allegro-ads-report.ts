@@ -4,7 +4,7 @@
  * nothing in the file is ever treated as an instruction.
  */
 export interface AdReportRow { offerId: string; offerName: string | null; campaigns: string[]; costGross: number; impressions: number; clicks: number; units: number; salesGross: number }
-export type AdReportParse = { ok: true; rows: AdReportRow[]; skipped: number } | { ok: false; error: string };
+export type AdReportParse = { ok: true; rows: AdReportRow[]; skipped: number; /** Data rows read, and the cost on rows that were skipped (no valid offer number), so a gap against the report total is visible. */ rowsRead: number; skippedCost: number } | { ok: false; error: string };
 
 export const MAX_REPORT_BYTES = 1_000_000;
 const MAX_LINES = 5000;
@@ -57,12 +57,13 @@ export function parseAdsReport(text: string): AdReportParse {
   if (i.offerId < 0 || i.cost < 0) return { ok: false, error: "This does not look like an Allegro Ads report. It needs the columns “Numer klikniętej oferty” and “Koszt brutto (PLN)”." };
 
   const by = new Map<string, AdReportRow>();
-  let skipped = 0;
+  let skipped = 0, skippedCost = 0, rowsRead = 0;
   for (const line of lines.slice(1)) {
     const c = splitLine(line, d);
     const offerId = (c[i.offerId] ?? "").trim();
     const cost = parseAmount(c[i.cost] ?? "");
-    if (!/^\d{5,20}$/.test(offerId) || !Number.isFinite(cost) || cost < 0 || cost > 10_000_000) { skipped++; continue; }
+    rowsRead++;
+    if (!/^\d{5,20}$/.test(offerId) || !Number.isFinite(cost) || cost < 0 || cost > 10_000_000) { skipped++; if (Number.isFinite(cost) && cost > 0 && cost <= 10_000_000) skippedCost += cost; continue; }
     const num = (k: number) => { const v = k >= 0 ? parseAmount(c[k] ?? "") : 0; return Number.isFinite(v) && v >= 0 ? v : 0; };
     const label = (k: number, max: number) => (k >= 0 ? (c[k] ?? "").replace(/[\u0000-\u001f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max) : "");
     const r = by.get(offerId) ?? { offerId, offerName: null, campaigns: [], costGross: 0, impressions: 0, clicks: 0, units: 0, salesGross: 0 };
@@ -74,5 +75,5 @@ export function parseAdsReport(text: string): AdReportParse {
   }
   if (by.size === 0) return { ok: false, error: "No rows with an offer number and a cost were found." };
   const rows = [...by.values()].map((r) => ({ ...r, costGross: Math.round(r.costGross * 100) / 100, salesGross: Math.round(r.salesGross * 100) / 100 }));
-  return { ok: true, rows, skipped };
+  return { ok: true, rows, skipped, rowsRead, skippedCost: Math.round(skippedCost * 100) / 100 };
 }

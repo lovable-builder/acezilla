@@ -89,7 +89,7 @@ export async function importAdsReport(formData: FormData) {
     })));
     if (error) throw new Error(error.message);
     const total = parsed.rows.reduce((a, r) => a + r.costGross, 0);
-    return back(qs, { notice: `Imported ad costs for ${parsed.rows.length} offer${parsed.rows.length === 1 ? "" : "s"} (${total.toFixed(2)} gross).${replaced ? ` Replaced ${replaced} earlier import${replaced === 1 ? "" : "s"} covering the same days.` : ""}${parsed.skipped ? ` ${parsed.skipped} row${parsed.skipped === 1 ? " was" : "s were"} skipped.` : ""}` });
+    return back(qs, { notice: `Read ${parsed.rowsRead} row${parsed.rowsRead === 1 ? "" : "s"}: imported ad costs for ${parsed.rows.length} offer${parsed.rows.length === 1 ? "" : "s"}, ${total.toFixed(2)} gross in total.${parsed.skipped ? ` ${parsed.skipped} row${parsed.skipped === 1 ? " was" : "s were"} skipped for having no valid offer number${parsed.skippedCost > 0 ? ` (${parsed.skippedCost.toFixed(2)} of cost). Compare this with your report total` : ""}.` : ""}${replaced ? ` Replaced ${replaced} earlier import${replaced === 1 ? "" : "s"} covering the same days.` : ""}` });
   } catch (e) { return back(qs, { error: e instanceof Error ? e.message : "Could not import the report" }); }
 }
 

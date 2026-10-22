@@ -23,9 +23,10 @@ export function xlsxToTsv(bytes: Uint8Array): string {
   const shared = files["xl/sharedStrings.xml"] ? [...strFromU8(files["xl/sharedStrings.xml"]).matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => textOf(m[1]!)) : [];
   const sheet = strFromU8(files[sheetName]!);
   const rows: string[][] = [];
-  for (const rm of sheet.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+  for (const rm of sheet.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+    if (rm[1] === undefined) continue; // an empty row written as <row .../>: it must not swallow the next row
     const cells: string[] = [];
-    for (const cm of rm[1]!.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    for (const cm of rm[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const attrs = cm[1]!, body = cm[2] ?? "";
       const ref = /\br="([A-Z]+)\d+"/.exec(attrs)?.[1];
       if (!ref) continue;

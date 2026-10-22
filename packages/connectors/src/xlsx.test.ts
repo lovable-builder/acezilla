@@ -25,3 +25,8 @@ test("skipped empty cells keep their column, and files that are not workbooks ar
   assert.throws(() => xlsxToTsv(new Uint8Array([0x50, 0x4b, 1, 2, 3, 4])), /Excel/);
   assert.ok(!isXlsx(new TextEncoder().encode("a,b")));
 });
+
+test("an empty row written as <row/> does not swallow the row after it", () => {
+  const sheet = `<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>h</t></is></c></row><row r="2" spans="1:3"/><row r="3"><c r="A3" t="inlineStr"><is><t>x</t></is></c></row></sheetData></worksheet>`;
+  assert.equal(xlsxToTsv(book(sheet)), "h\nx");
+});
