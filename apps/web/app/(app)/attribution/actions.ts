@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireWriter } from "@/lib/workspace";
-import { MAX_REPORT_BYTES, parseAdsReport } from "@acezilla/connectors";
+import { isXlsx, MAX_REPORT_BYTES, parseAdsReport, xlsxToTsv } from "@acezilla/connectors";
 
 /** Only the period parameters survive a round trip, so a form cannot send the user somewhere else. */
 const safeQs = (v: FormDataEntryValue | null) => {
@@ -51,9 +51,10 @@ export async function saveVatRate(formData: FormData) {
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Reads an uploaded export as UTF-8, falling back to Windows-1250 (what Polish spreadsheet exports often use). */
+/** Reads an uploaded export: an Excel workbook (.xlsx) or text as UTF-8, falling back to Windows-1250 (what Polish spreadsheet exports often use). */
 async function readText(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
+  if (isXlsx(new Uint8Array(buf))) return xlsxToTsv(new Uint8Array(buf));
   try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { return new TextDecoder("windows-1250").decode(buf); }
 }
 

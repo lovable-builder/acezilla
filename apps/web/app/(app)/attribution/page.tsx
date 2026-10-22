@@ -150,7 +150,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
             <h2 className="h2" style={{ margin: 0 }}>Exact ad cost per offer</h2>
             <p className="sub" style={{ margin: 0, fontSize: 13 }}>
               {adImports.length === 0
-                ? "Allegro does not say which listing each ad charge belongs to, so ad cost is split equally across your offers. For the exact figures, open Allegro Ads, copy or download the campaign table (it has “Koszt brutto” per clicked offer), and add it here."
+                ? "Allegro does not say which listing each ad charge belongs to, so ad cost is split equally across your offers. For the exact figures, open Allegro Ads, download the campaign report (Excel or CSV) or copy the table (it has “Koszt brutto” per clicked offer), and add it here."
                 : "Imported reports give each offer its real ad cost. Ad charges the report does not cover are still split equally."}
             </p>
             <form action={importAdsReport} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -162,7 +162,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
                 <input type="date" name="to" className="field" required aria-label="Last day" defaultValue={endDate} style={{ padding: "5px 8px" }} />
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <input type="file" name="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="field" aria-label="Report file" style={{ padding: "5px 8px" }} />
+                <input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt" className="field" aria-label="Report file" style={{ padding: "5px 8px" }} />
                 <span className="eyebrow">or paste the table</span>
               </div>
               <textarea name="text" rows={3} className="field" placeholder="Paste the table copied from Allegro Ads, including the header row" aria-label="Pasted report" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12 }} />

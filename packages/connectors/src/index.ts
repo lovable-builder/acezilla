@@ -8,3 +8,4 @@ export * from "./google";
 export * from "./woocommerce";
 export * from "./allegro";
 export * from "./allegro-ads-report";
+export * from "./xlsx";
