@@ -14,18 +14,28 @@ export async function loadAdRows(supabase: SupabaseClient, workspaceId: string):
     for (const r of data ?? []) rows.push({ campaignId: r.campaign_id, campaignName: r.campaign_name, platform: r.platform, status: r.status, date: r.date, spend: Number(r.spend), impressions: Number(r.impressions), clicks: Number(r.clicks), conversions: Number(r.conversions), revenue: Number(r.revenue) });
     if ((data?.length ?? 0) < PAGE) break;
   }
-  return rows;
+  return netAdRows(rows, await loadVatRate(supabase, workspaceId));
 }
 
 /** Store orders created on or after `sinceDate` (YYYY-MM-DD) and, optionally, on or before `endDate`. */
+/** Allegro amounts include VAT; WooCommerce revenue is already before tax. This takes the seller's VAT rate off Allegro orders so the two are comparable. */
+export async function loadVatRate(supabase: SupabaseClient, workspaceId: string): Promise<number> {
+  const { data } = await supabase.from("marketplace_setting").select("vat_rate").eq("workspace_id", workspaceId).maybeSingle();
+  return Number(data?.vat_rate ?? 0);
+}
+export const netOfVat = (rows: OrderRow[], vat: number): OrderRow[] => (vat > 0 ? rows.map((r) => (r.externalId?.startsWith("allegro:") ? { ...r, revenue: Math.round((r.revenue / (1 + vat)) * 100) / 100 } : r)) : rows);
+
+/** Allegro ad charges are billed with VAT; take it off so they sit next to net Allegro sales and other platforms. */
+export const netAdRows = (rows: DailyRow[], vat: number): DailyRow[] => (vat > 0 ? rows.map((r) => (r.platform === "allegro" ? { ...r, spend: Math.round((r.spend / (1 + vat)) * 100) / 100 } : r)) : rows);
+
 export async function loadOrders(supabase: SupabaseClient, workspaceId: string, sinceDate: string, endDate?: string): Promise<OrderRow[]> {
   const out: OrderRow[] = [];
   for (let from = 0; from < 30 * PAGE; from += PAGE) {
-    const { data } = await supabase.from("order").select("created_at,revenue,utm,click_ids,customer_id").eq("workspace_id", workspaceId).gte("created_at", `${sinceDate}T00:00:00Z`).order("created_at", { ascending: false }).range(from, from + PAGE - 1);
-    for (const r of data ?? []) if (!endDate || (r.created_at as string).slice(0, 10) <= endDate) out.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
+    const { data } = await supabase.from("order").select("external_id,created_at,revenue,utm,click_ids,customer_id").eq("workspace_id", workspaceId).gte("created_at", `${sinceDate}T00:00:00Z`).order("created_at", { ascending: false }).range(from, from + PAGE - 1);
+    for (const r of data ?? []) if (!endDate || (r.created_at as string).slice(0, 10) <= endDate) out.push({ externalId: r.external_id as string, createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
     if ((data?.length ?? 0) < PAGE) break;
   }
-  return out;
+  return netOfVat(out, await loadVatRate(supabase, workspaceId));
 }
 
 /** Per-offer profit for Allegro over a period, or null when Allegro is not connected. */

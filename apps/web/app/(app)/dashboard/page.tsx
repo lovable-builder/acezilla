@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { parsePeriod, parseSavedView } from "@/lib/period";
-import { loadProducts } from "@/lib/data";
+import { loadProducts, loadVatRate, netAdRows, netOfVat } from "@/lib/data";
 import { Term } from "@/components/app/term";
 import { Checklist } from "@/components/app/checklist";
 import { ClaimedVsReal, CountUp, RoasGauge, SpendDonut } from "@/components/dash/gadgets";
@@ -172,6 +172,9 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     for (const r of data ?? []) orderRows.push({ externalId: r.external_id as string, createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
     if ((data?.length ?? 0) < PAGE) break;
   }
+  const vat = await loadVatRate(supabase, current.id);
+  orderRows.splice(0, orderRows.length, ...netOfVat(orderRows, vat));
+  rows.splice(0, rows.length, ...netAdRows(rows, vat));
   const { data: allConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id);
   const storeConns = (allConns ?? []).filter((c) => ["woocommerce", "allegro", "shopify"].includes(c.platform as string));
   const connectedStores = storeConns.map((c) => c.platform as string);
