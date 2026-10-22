@@ -49,12 +49,12 @@ test("fees without an offer are shared across the offers that sold, so no offer 
   assert.equal(a.profit, 70); assert.equal(r.accountLevel.total, 0); assert.equal(r.totals.profit, 70); // 100 - 25 - 5
 });
 
-test("shared ads and subscription follow sales, shared delivery follows units, and totals never change", () => {
+test("shared ads are split equally per offer, subscription follows sales, delivery follows units, and totals never change", () => {
   const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map([["a", 0], ["b", 0]]),
     lines: [L("a", 3, 10), L("b", 1, 70)], // a: 3 units, 30 sales; b: 1 unit, 70 sales
     fees: [F("ads", null, 100), F("delivery", null, 40)] });
   const by = Object.fromEntries(r.offers.map((o) => [o.offerId, o]));
-  assert.equal(by.a!.ads, 30); assert.equal(by.b!.ads, 70); // by sales
+  assert.equal(by.a!.ads, 50); assert.equal(by.b!.ads, 50); // equal per offer
   assert.equal(by.a!.delivery, 30); assert.equal(by.b!.delivery, 10); // by units
   assert.equal(r.totals.ads, 100); assert.equal(r.totals.fees, 40); assert.equal(r.totals.profit, 100 - 100 - 40);
 });

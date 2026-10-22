@@ -50,14 +50,15 @@ export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: M
     if (f.category === "ads") p.ads += v; else { p[f.category] += v; p.fees += v; }
   }
   // Campaign charges, delivery and the subscription are not tied to one offer by Allegro. Leaving them out would show every offer
-  // as profitable while the account loses money, so they are shared across the offers that sold: ads, subscription and other
-  // by share of sales, delivery by share of units. The shared part is kept on each offer so the table can say so.
+  // as profitable while the account loses money, so they are shared across the offers that sold: ads equally per offer (the average ad
+  // spend per offer), subscription and other by share of sales, delivery by share of units. The shared part is kept on each offer so the table can say so.
   const sold = [...m.values()].filter((p) => p.revenue > 0);
   const totalRev = sold.reduce((a, p) => a + p.revenue, 0), totalUnits = sold.reduce((a, p) => a + p.units, 0);
   if (totalRev > 0) {
     for (const p of sold) {
       const byRev = p.revenue / totalRev, byUnits = totalUnits > 0 ? p.units / totalUnits : byRev;
-      p.ads += account.ads * byRev; p.shared += account.ads * byRev;
+      const adShare = account.ads / sold.length;
+      p.ads += adShare; p.shared += adShare;
       for (const k of ["commission", "fulfillment", "other"] as const) { p[k] += account[k] * byRev; p.fees += account[k] * byRev; p.shared += account[k] * byRev; }
       p.delivery += account.delivery * byUnits; p.fees += account.delivery * byUnits; p.shared += account.delivery * byUnits;
     }
