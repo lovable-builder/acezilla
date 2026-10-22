@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { parseWooPush, verifyWooSignature } from "@acezilla/connectors";
 import { decryptToken } from "@/lib/crypto";
 import { alignCurrency } from "@/lib/currency";
-import { ingestOrders } from "@/lib/ingest";
+import { ingestOrders, ingestProducts } from "@/lib/ingest";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_BODY = 512 * 1024;
@@ -35,6 +35,8 @@ export async function POST(req: Request) {
 
   if (push.type === "disconnect") {
     await admin.from("order").delete().eq("workspace_id", ws).like("external_id", "woo:%");
+    await admin.from("order_line").delete().eq("workspace_id", ws).eq("platform", "woocommerce");
+    await admin.from("store_product").delete().eq("workspace_id", ws).eq("platform", "woocommerce");
     await admin.from("connection").delete().eq("id", conn.id);
     return NextResponse.json({ ok: true, message: "Disconnected. Imported orders were deleted." });
   }
@@ -51,8 +53,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, message: "acezilla received the test. Your store is connected.", warnings });
   }
 
+  if (push.type === "products") {
+    try {
+      const r = await ingestProducts(admin, ws, "woocommerce", push.products, push.remove);
+      await admin.from("connection").update({ status: "active", last_sync_at: now }).eq("id", conn.id);
+      return NextResponse.json({ ok: true, products: r.products, removed: r.removed });
+    } catch (e) {
+      console.warn("[woo] products failed", e instanceof Error ? e.message : e);
+      return NextResponse.json({ error: "Could not store the products" }, { status: 500 });
+    }
+  }
+
   try {
-    const r = await ingestOrders(admin, ws, push.orders, push.remove);
+    const r = await ingestOrders(admin, ws, push.orders, push.remove, push.lines);
     const warning = await currencyWarning(push.currency);
     // Remember which orders were left out and why, by id, so re-sending history never double counts.
     const skippedOrders = { ...(stats.skipped_orders ?? {}) };

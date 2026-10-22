@@ -11,7 +11,7 @@ import { setWorkspaceCurrency } from "../woocommerce-actions";
 
 export const dynamic = "force-dynamic";
 const PLUGIN_ZIP = "/downloads/acezilla-for-woocommerce.zip";
-const PLUGIN_VERSION = "1.0.2"; // keep in step with plugins/acezilla-for-woocommerce/acezilla-for-woocommerce.php
+const PLUGIN_VERSION = "1.1.0"; // keep in step with plugins/acezilla-for-woocommerce/acezilla-for-woocommerce.php
 
 function Step({ n, title, done, children }: { n: number; title: string; done?: boolean; children: React.ReactNode }) {
   return (

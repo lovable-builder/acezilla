@@ -74,6 +74,17 @@ test("an imported Ads report gives exact ad cost per offer and replaces that muc
   assert.equal(r.totals.ads, 100); // never more than was paid
 });
 
+test("paid versus organic: units not sold through ads are organic, never negative", () => {
+  const r = buildOfferProfit({ ...P, vatRate: 0.23, costs: new Map(), lines: [L("a", 10, 10), L("b", 2, 10)],
+    adStats: new Map([["a", { clicks: 200, units: 4, cost: 123 }], ["b", { clicks: 50, units: 3, cost: 10 }]]), fees: [] });
+  const by = Object.fromEntries(r.offers.map((o) => [o.offerId, o]));
+  assert.deepEqual([by.a!.paid!.adUnits, by.a!.paid!.organicUnits, by.a!.paid!.clicks], [4, 6, 200]);
+  assert.equal(by.a!.paid!.adShare, 0.4); assert.equal(by.a!.paid!.adConversion, 0.02); assert.equal(by.a!.paid!.costPerAdSale, 25); // 123 / 1.23 / 4
+  assert.equal(by.b!.paid!.organicUnits, 0); assert.equal(by.b!.paid!.adShare, 1); // Allegro credited more ad sales than were sold in view
+  const none = buildOfferProfit({ ...P, vatRate: 0, costs: new Map(), lines: [L("c", 1, 10)], fees: [] });
+  assert.equal(none.offers[0]!.paid, null);
+});
+
 test("refunds (negative fee amounts) reduce costs", () => {
   const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map([["a", 0]]), lines: [L("a", 1, 100)], fees: [F("ads", "a", 20), F("ads", "a", -5)] });
   assert.equal(r.offers[0]!.ads, 15);

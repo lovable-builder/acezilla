@@ -146,6 +146,23 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
               </tbody>
             </table>
           </Card>
+          {profit.offers.some((o) => o.paid) && (
+            <Card style={{ overflowX: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              <h2 className="h2" style={{ margin: 0 }}>Paid vs organic <span className="eyebrow" style={{ marginLeft: 8 }}>From your Allegro Ads report</span></h2>
+              <table className="t tabnum">
+                <thead><tr><th style={{ textAlign: "left" }}>Offer</th><th>Units sold</th><th>Ad clicks</th><th>Sold through ads</th><th>Organic</th><th>Ads share</th><th>Sales per click</th><th>Ad cost per sale</th></tr></thead>
+                <tbody>{profit.offers.filter((o) => o.paid).map((o) => (
+                  <tr key={o.offerId}>
+                    <td style={{ textAlign: "left", maxWidth: 260, overflowWrap: "anywhere" }}>{o.name}</td>
+                    <td>{int(o.units)}</td><td>{int(o.paid!.clicks)}</td><td>{o.paid!.adUnits.toLocaleString("en-US", { maximumFractionDigits: 1 })}</td>
+                    <td style={{ fontWeight: 600 }}>{o.paid!.organicUnits.toLocaleString("en-US", { maximumFractionDigits: 1 })}</td>
+                    <td>{pct(o.paid!.adShare)}</td><td>{pct(o.paid!.adConversion, 1)}</td><td>{o.paid!.costPerAdSale === null ? "—" : money(o.paid!.costPerAdSale, cur)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <p className="sub" style={{ margin: 0, fontSize: 12 }}>Organic units are units sold minus the units Allegro credits to your ads, so they are sales you got without paying for a click. Allegro counts an ad sale when a shopper clicked the ad first, so the ad figure can exceed units sold in a short period; organic is then shown as 0. The report covers one date range, so for a shorter period its figures are spread evenly over the days.</p>
+            </Card>
+          )}
           <Card id="ads-report" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <h2 className="h2" style={{ margin: 0 }}>Exact ad cost per offer</h2>
             <p className="sub" style={{ margin: 0, fontSize: 13 }}>

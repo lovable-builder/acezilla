@@ -7,6 +7,16 @@ export interface FeeRow {
   imported?: boolean;
 }
 
+/** What an imported Allegro Ads report says about one offer in the viewed period. Cost is gross, like every Allegro amount. */
+export interface AdStats { clicks: number; units: number; cost: number }
+/** Paid versus organic for one offer. Ad units are Allegro's attribution, so they can exceed units sold in a short view; then organic is 0. */
+export interface PaidVsOrganic {
+  clicks: number; adUnits: number; organicUnits: number;
+  /** Share of units sold that came through ads. */ adShare: number | null;
+  /** Ad sales per click. */ adConversion: number | null;
+  /** Ad cost per unit sold through ads (net). */ costPerAdSale: number | null;
+}
+
 export interface OfferProfit {
   offerId: string; name: string; units: number;
   revenue: number; commission: number; delivery: number; fulfillment: number; other: number; fees: number; ads: number;
@@ -16,6 +26,7 @@ export interface OfferProfit {
   /** Ad cost as a share of revenue. */ acos: number | null;
   /** The highest ad cost share that still leaves the offer at break-even (needs a unit cost). */ breakEvenAcos: number | null;
   status: "loss" | "thin" | "ok" | "unknown";
+  /** Null when no imported report covers this offer. */ paid: PaidVsOrganic | null;
 }
 export interface OfferProfitReport {
   offers: OfferProfit[];
@@ -34,13 +45,13 @@ const empty = (): Record<FeeCategory, number> => ({ commission: 0, ads: 0, deliv
  * Amounts from Allegro are gross (VAT included). With a VAT rate every amount is divided by (1 + rate), which is what a
  * VAT-registered seller really earns and pays. `costs` are net unit costs of the goods by offer id.
  */
-export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: Map<string, number>; names?: Map<string, string>; vatRate: number; from: string; to: string }): OfferProfitReport {
+export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: Map<string, number>; adStats?: Map<string, AdStats>; names?: Map<string, string>; vatRate: number; from: string; to: string }): OfferProfitReport {
   const net = (x: number) => x / (1 + o.vatRate);
   const inRange = (iso: string) => day(iso) >= o.from && day(iso) <= o.to;
   const m = new Map<string, OfferProfit>();
   const get = (id: string, name: string | null) => {
     let p = m.get(id);
-    if (!p) { p = { offerId: id, name: name || o.names?.get(id) || `Offer ${id}`, units: 0, revenue: 0, commission: 0, delivery: 0, fulfillment: 0, other: 0, fees: 0, ads: 0, shared: 0, profitBeforeCost: 0, unitCost: null, profit: null, acos: null, breakEvenAcos: null, status: "unknown" }; m.set(id, p); }
+    if (!p) { p = { offerId: id, name: name || o.names?.get(id) || `Offer ${id}`, units: 0, revenue: 0, commission: 0, delivery: 0, fulfillment: 0, other: 0, fees: 0, ads: 0, shared: 0, profitBeforeCost: 0, unitCost: null, profit: null, acos: null, breakEvenAcos: null, status: "unknown" , paid: null }; m.set(id, p); }
     else if (name && p.name.startsWith("Offer ")) p.name = name;
     return p;
   };
@@ -75,6 +86,16 @@ export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: M
   const offers = [...m.values()].map((p) => {
     p.profitBeforeCost = p.revenue - p.fees - p.ads;
     p.acos = p.revenue > 0 ? p.ads / p.revenue : null;
+    const st = o.adStats?.get(p.offerId);
+    if (st) {
+      const adUnits = Math.round(st.units * 10) / 10;
+      p.paid = {
+        clicks: Math.round(st.clicks), adUnits, organicUnits: Math.max(0, Math.round((p.units - st.units) * 10) / 10),
+        adShare: p.units > 0 ? Math.min(1, st.units / p.units) : null,
+        adConversion: st.clicks > 0 ? st.units / st.clicks : null,
+        costPerAdSale: st.units > 0 ? r2(net(st.cost) / st.units) : null,
+      };
+    }
     const c = o.costs.get(p.offerId);
     if (c !== undefined) {
       p.unitCost = c; p.profit = p.profitBeforeCost - c * p.units; goods += c * p.units;

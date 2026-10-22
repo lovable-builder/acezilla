@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mapPushedOrder, newPairingCode, normalizePairingCode, normalizeStoreUrl, parseWooPush, signWooBody, verifyWooSignature } from "./woocommerce";
+import { mapPushedOrder, mapPushedProduct, newPairingCode, normalizePairingCode, normalizeStoreUrl, parseWooPush, signWooBody, verifyWooSignature } from "./woocommerce";
 
 const order = (over: Record<string, unknown> = {}) => ({
   id: 101, status: "completed", created_gmt: "2026-10-01T10:00:00+00:00", total: 130, tax: 20, shipping: 9, shipping_tax: 1, refunded: 0, currency: "EUR", customer_id: 0,
@@ -76,4 +76,30 @@ test("parses pings, single and batched orders, disconnects, and refuses junk", (
   assert.equal(parseWooPush({ type: "orders", orders: Array.from({ length: 101 }, (_, i) => order({ id: i + 1 })) }), null);
   assert.equal(parseWooPush({ type: "orders", orders: [order(), { id: "bad" }] }), null, "one bad order rejects the whole push");
   for (const junk of [null, "x", 5, {}, { type: "delete_everything" }, { type: "order" }]) assert.equal(parseWooPush(junk), null);
+});
+
+test("products: only real products pass, trashed ones are removals, numbers are clamped", () => {
+  const ok = mapPushedProduct({ id: 12, name: "  Lampka  ", sku: "L-1", price: "49.90", status: "publish", stock_status: "instock", type: "simple", total_sales: 3 });
+  assert.ok(ok && "keep" in ok); if (!ok || !("keep" in ok)) return;
+  assert.deepEqual(ok.keep, { externalId: "12", name: "Lampka", sku: "L-1", price: 49.9, status: "publish", stockStatus: "instock", productType: "simple", totalSales: 3 });
+  assert.deepEqual(mapPushedProduct({ id: 5, name: "x", status: "trash" }), { remove: "5" });
+  assert.equal(mapPushedProduct({ id: 0, name: "x" }), null); assert.equal(mapPushedProduct({ id: 3, name: "" }), null); assert.equal(mapPushedProduct("nope"), null);
+  const odd = mapPushedProduct({ id: 7, name: "n", price: "", total_sales: -4 });
+  assert.ok(odd && "keep" in odd && odd.keep.price === null && odd.keep.totalSales === 0);
+});
+
+test("a products push is parsed, and an empty or oversized one is refused", () => {
+  const p = parseWooPush({ type: "products", products: [{ id: 1, name: "A" }, { id: 2, name: "B", status: "trash" }] });
+  assert.ok(p && p.type === "products"); if (!p || p.type !== "products") return;
+  assert.deepEqual([p.products.length, p.remove], [1, ["2"]]);
+  assert.equal(parseWooPush({ type: "products", products: [] }), null);
+  assert.equal(parseWooPush({ type: "products", products: Array.from({ length: 201 }, (_, i) => ({ id: i + 1, name: "x" })) }), null);
+});
+
+test("order lines come with a counted order: per-unit price before tax, bad lines dropped", () => {
+  const m = mapPushedOrder({ id: 9, status: "completed", created_gmt: "2026-10-01T10:00:00Z", total: 120, tax: 20, items: [{ id: 1, product_id: 55, name: "Lampka", qty: 2, total: 80 }, { id: 2, product_id: 0, qty: 1, total: 5 }, { id: 3, product_id: 56, qty: 0, total: 5 }] });
+  assert.ok(m && "keep" in m); if (!m || !("keep" in m)) return;
+  assert.deepEqual(m.lines, [{ lineKey: "woo:9:1", orderExternalId: "woo:9", productId: "55", name: "Lampka", qty: 2, unitPrice: 40 }]);
+  const gone = mapPushedOrder({ id: 10, status: "cancelled", created_gmt: "2026-10-01T10:00:00Z", total: 50, items: [{ id: 1, product_id: 55, qty: 1, total: 50 }] });
+  assert.ok(gone && "remove" in gone);
 });

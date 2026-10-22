@@ -42,6 +42,8 @@ export async function disconnect(formData: FormData) {
     if (conn.platform === "woocommerce") {
       const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "woo:%");
       if (eo) throw new Error(eo.message);
+      await admin.from("order_line").delete().eq("workspace_id", conn.workspace_id).eq("platform", "woocommerce");
+      await admin.from("store_product").delete().eq("workspace_id", conn.workspace_id).eq("platform", "woocommerce");
     }
     if (conn.platform === "allegro") {
       const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "allegro:%");

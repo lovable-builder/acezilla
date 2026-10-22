@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildOfferProfit, type DailyRow, type FeeRow, type LineRow, type OrderRow } from "@acezilla/models";
+import { buildOfferProfit, buildProductList, type CatalogItem, type SoldLine, type AdStats, type DailyRow, type FeeRow, type LineRow, type OrderRow } from "@acezilla/models";
 import { shiftDate } from "@acezilla/models";
 
 const PAGE = 1000;
@@ -38,22 +38,26 @@ export async function loadOfferProfit(supabase: SupabaseClient, workspaceId: str
     supabase.from("offer_cost").select("offer_id,unit_cost").eq("workspace_id", workspaceId).eq("platform", "allegro"),
     supabase.from("marketplace_setting").select("vat_rate").eq("workspace_id", workspaceId).maybeSingle(),
     supabase.from("offer_stats_snapshots").select("offer_id,name").eq("workspace_id", workspaceId).eq("platform", "allegro").gte("day", shiftDate(todayUtc(), -7)),
-    supabase.from("offer_ad_report").select("offer_id,offer_name,date_from,date_to,cost_gross").eq("workspace_id", workspaceId).eq("platform", "allegro").lte("date_from", end).gte("date_to", start).limit(5000),
+    supabase.from("offer_ad_report").select("offer_id,offer_name,date_from,date_to,cost_gross,clicks,units").eq("workspace_id", workspaceId).eq("platform", "allegro").lte("date_from", end).gte("date_to", start).limit(5000),
   ]);
   // An uploaded Ads report covers a date range with one total per offer. Spread evenly over its days, take the days inside this period.
   const dayMs = 86_400_000, dn = (d: string) => Date.parse(`${d}T00:00:00Z`) / dayMs;
   const reportFees: FeeRow[] = [];
   const reportNames = new Map<string, string>();
+  const adStats = new Map<string, AdStats>();
   for (const r of reports ?? []) {
     const f = r.date_from as string, t = r.date_to as string, n = dn(t) - dn(f) + 1;
     const lo = f > start ? f : start, hi = t < end ? t : end;
     const overlap = dn(hi) - dn(lo) + 1;
     if (overlap <= 0 || n <= 0) continue;
     reportFees.push({ category: "ads", offerId: r.offer_id as string, amount: Number(r.cost_gross) * (overlap / n), occurredAt: `${hi}T12:00:00Z`, imported: true });
+    const part = overlap / n, st = adStats.get(r.offer_id as string) ?? { clicks: 0, units: 0, cost: 0 };
+    st.clicks += Number(r.clicks) * part; st.units += Number(r.units) * part; st.cost += Number(r.cost_gross) * part;
+    adStats.set(r.offer_id as string, st);
     if (r.offer_name) reportNames.set(r.offer_id as string, r.offer_name as string);
   }
   return buildOfferProfit({
-    from: start, to: end, vatRate: Number(setting?.vat_rate ?? 0),
+    from: start, to: end, vatRate: Number(setting?.vat_rate ?? 0), adStats,
     lines: (lines ?? []).map((l) => ({ offerId: l.offer_id as string, name: (l.name as string | null) ?? null, qty: l.qty as number, unitPrice: Number(l.unit_price), boughtAt: l.bought_at as string })) as LineRow[],
     fees: [...(fees ?? []).map((f) => ({ category: f.category as FeeRow["category"], offerId: (f.offer_id as string | null) ?? null, amount: Number(f.amount), occurredAt: f.occurred_at as string })), ...reportFees],
     costs: new Map((costs ?? []).map((c) => [c.offer_id as string, Number(c.unit_cost)])),
@@ -71,4 +75,25 @@ export async function loadAdImports(supabase: SupabaseClient, workspaceId: strin
     b.offers += 1; b.cost += Number(r.cost_gross); m.set(k, b);
   }
   return [...m.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Catalogue and sales for the Products page: WooCommerce products pushed by the plugin, Allegro offers from the latest snapshot, and order lines from both. */
+export async function loadProducts(supabase: SupabaseClient, workspaceId: string, start: string, end: string) {
+  const [{ data: woo }, { data: snaps }, { data: lines }, { data: setting }] = await Promise.all([
+    supabase.from("store_product").select("external_id,name,price,status,stock_status").eq("workspace_id", workspaceId).eq("platform", "woocommerce").limit(5000),
+    supabase.from("offer_stats_snapshots").select("offer_id,name,price,day").eq("workspace_id", workspaceId).eq("platform", "allegro").gte("day", shiftDate(todayUtc(), -8)).order("day", { ascending: false }).limit(5000),
+    supabase.from("order_line").select("platform,offer_id,name,qty,unit_price,bought_at").eq("workspace_id", workspaceId).gte("bought_at", `${start}T00:00:00Z`).limit(20000),
+    supabase.from("marketplace_setting").select("vat_rate").eq("workspace_id", workspaceId).maybeSingle(),
+  ]);
+  const catalog: CatalogItem[] = (woo ?? []).map((p) => ({ channel: "woocommerce", productId: p.external_id as string, name: p.name as string, price: p.price === null ? null : Number(p.price), status: p.status as string, stock: (p.stock_status as string | null) ?? null }));
+  const seen = new Set<string>();
+  for (const o of snaps ?? []) {
+    const id = o.offer_id as string;
+    if (seen.has(id) || !o.name) continue;
+    seen.add(id);
+    catalog.push({ channel: "allegro", productId: id, name: o.name as string, price: o.price === null ? null : Number(o.price), status: "active", stock: null });
+  }
+  const sold: SoldLine[] = (lines ?? []).map((l) => ({ channel: l.platform as string, productId: l.offer_id as string, name: (l.name as string | null) ?? null, qty: l.qty as number, unitPrice: Number(l.unit_price), at: l.bought_at as string }));
+  const rows = buildProductList({ catalog, lines: sold, from: start, to: end, vat: { allegro: Number(setting?.vat_rate ?? 0) } });
+  return { rows, wooCatalogSize: woo?.length ?? 0 };
 }

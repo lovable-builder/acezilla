@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       acezilla for WooCommerce
  * Plugin URI:        https://acezilla.vercel.app
- * Description:       Sends each WooCommerce order's value, date and marketing source to acezilla so it can measure real return on ad spend. Read-only: acezilla never changes your store, and customer names, emails and addresses never leave it.
- * Version:           1.0.2
+ * Description:       Sends each WooCommerce order's value, date, products and marketing source, and your product list, to acezilla so it can measure real return on ad spend. Read-only: acezilla never changes your store, and customer names, emails and addresses never leave it.
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ACEZILLA_WC_VERSION', '1.0.2' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
+define( 'ACEZILLA_WC_VERSION', '1.1.0' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
 if ( ! defined( 'ACEZILLA_URL' ) ) {
 	// Override in wp-config.php (define( 'ACEZILLA_URL', 'http://localhost:3000' );) when testing against a local acezilla.
 	define( 'ACEZILLA_URL', 'https://acezilla.vercel.app' );
@@ -52,6 +52,14 @@ add_action( 'plugins_loaded', function () {
 	add_action( 'woocommerce_order_refunded', 'acezilla_wc_queue_order', 20, 1 );
 	add_action( 'acezilla_wc_push_order', 'acezilla_wc_push_order', 10, 2 );
 	add_action( 'acezilla_wc_backfill_batch', 'acezilla_wc_backfill_batch', 10, 1 );
+	// Product list: keep it current, and send it once after an update or a new connection.
+	add_action( 'woocommerce_new_product', 'acezilla_wc_queue_product', 20, 1 );
+	add_action( 'woocommerce_update_product', 'acezilla_wc_queue_product', 20, 1 );
+	add_action( 'trashed_post', 'acezilla_wc_queue_product', 20, 1 );
+	add_action( 'before_delete_post', 'acezilla_wc_queue_product', 20, 1 );
+	add_action( 'acezilla_wc_push_product', 'acezilla_wc_push_product', 10, 2 );
+	add_action( 'acezilla_wc_products_batch', 'acezilla_wc_products_batch', 10, 1 );
+	add_action( 'admin_init', 'acezilla_wc_maybe_sync_products' );
 }, 20 );
 
 register_activation_hook( __FILE__, function () {
@@ -191,6 +199,23 @@ function acezilla_wc_order_payload( $order ) {
 			}
 		}
 	}
+	$items = array();
+	foreach ( $order->get_items() as $item_id => $item ) {
+		if ( ! $item instanceof WC_Order_Item_Product || count( $items ) >= 100 ) {
+			continue;
+		}
+		$pid = (int) $item->get_product_id(); // a variation reports its parent product
+		if ( $pid <= 0 ) {
+			continue;
+		}
+		$items[] = array(
+			'id'         => (int) $item_id,
+			'product_id' => $pid,
+			'name'       => substr( sanitize_text_field( $item->get_name() ), 0, 200 ),
+			'qty'        => (int) $item->get_quantity(),
+			'total'      => round( (float) $item->get_total(), 2 ), // after discounts, before tax
+		);
+	}
 	$email = strtolower( trim( (string) $order->get_billing_email() ) );
 	return array(
 		'id'           => (int) $order->get_id(),
@@ -206,6 +231,7 @@ function acezilla_wc_order_payload( $order ) {
 		'email_hash'   => '' !== $email ? hash( 'sha256', $email ) : '',
 		'utm'          => (object) $utm,
 		'click_ids'    => (object) $click_ids,
+		'items'        => $items,
 	);
 }
 
@@ -286,6 +312,114 @@ function acezilla_wc_backfill_batch( $page = 1 ) {
 		acezilla_wc_state( array( 'backfill_done' => time() ) );
 	}
 	return count( $orders );
+}
+
+/* ---------------------------------------------------------------- products */
+
+/** A product as acezilla needs it: name, price and stock. Variations are not sent, only the parent product. */
+function acezilla_wc_product_payload( $product ) {
+	$price = (string) $product->get_price();
+	return array(
+		'id'          => (int) $product->get_id(),
+		'name'        => substr( wp_strip_all_tags( (string) $product->get_name() ), 0, 200 ),
+		'sku'         => substr( (string) $product->get_sku(), 0, 60 ),
+		'price'       => '' === $price ? null : round( (float) $price, 2 ),
+		'status'      => (string) $product->get_status(),
+		'stock_status' => (string) $product->get_stock_status(),
+		'type'        => (string) $product->get_type(),
+		'total_sales' => (int) $product->get_total_sales(),
+	);
+}
+
+/** A product was added, changed, trashed or deleted: tell acezilla in the background. */
+function acezilla_wc_queue_product( $post_id ) {
+	if ( ! acezilla_wc_conn() || 'product' !== get_post_type( $post_id ) ) {
+		return;
+	}
+	$args = array( (int) $post_id, 0 );
+	if ( function_exists( 'as_enqueue_async_action' ) ) {
+		if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'acezilla_wc_push_product', $args, ACEZILLA_WC_GROUP ) ) {
+			return;
+		}
+		as_enqueue_async_action( 'acezilla_wc_push_product', $args, ACEZILLA_WC_GROUP );
+	} else {
+		wp_schedule_single_event( time() + 5, 'acezilla_wc_push_product', $args );
+	}
+}
+
+function acezilla_wc_push_product( $product_id, $attempt = 0 ) {
+	$product = wc_get_product( $product_id );
+	// A product that no longer exists is reported as removed.
+	$payload = $product instanceof WC_Product ? acezilla_wc_product_payload( $product ) : array( 'id' => (int) $product_id, 'name' => '-', 'status' => 'trash' );
+	$r = acezilla_wc_send( 'products', array( 'products' => array( $payload ) ) );
+	if ( $r['ok'] || in_array( $r['status'], array( 400, 401, 403, 404 ), true ) || $attempt >= 5 ) {
+		return;
+	}
+	$when = time() + (int) ( 60 * pow( 3, $attempt ) );
+	if ( function_exists( 'as_schedule_single_action' ) ) {
+		as_schedule_single_action( $when, 'acezilla_wc_push_product', array( (int) $product_id, $attempt + 1 ), ACEZILLA_WC_GROUP );
+	} else {
+		wp_schedule_single_event( $when, 'acezilla_wc_push_product', array( (int) $product_id, $attempt + 1 ) );
+	}
+}
+
+/** The whole product list, 100 products per batch. Continues in the background while there are more. */
+function acezilla_wc_products_batch( $page = 1 ) {
+	$page     = max( 1, (int) $page );
+	$products = wc_get_products( array(
+		'limit'   => 100,
+		'paged'   => $page,
+		'status'  => array( 'publish', 'draft', 'private', 'pending' ),
+		'type'    => array_keys( wc_get_product_types() ),
+		'orderby' => 'ID',
+		'order'   => 'ASC',
+		'return'  => 'objects',
+	) );
+	if ( empty( $products ) ) {
+		return 0;
+	}
+	$payload = array();
+	foreach ( $products as $p ) {
+		if ( $p instanceof WC_Product ) {
+			$payload[] = acezilla_wc_product_payload( $p );
+		}
+	}
+	$r = acezilla_wc_send( 'products', array( 'products' => $payload ) );
+	if ( ! $r['ok'] ) {
+		return false;
+	}
+	if ( count( $products ) >= 100 && function_exists( 'as_enqueue_async_action' ) ) {
+		as_enqueue_async_action( 'acezilla_wc_products_batch', array( $page + 1 ), ACEZILLA_WC_GROUP );
+	}
+	return count( $payload );
+}
+
+/** Starts a full product sync in the background. */
+function acezilla_wc_enqueue_products() {
+	if ( ! acezilla_wc_conn() || ! class_exists( 'WooCommerce' ) ) {
+		return;
+	}
+	acezilla_wc_state( array( 'products_v' => ACEZILLA_WC_VERSION ) );
+	if ( function_exists( 'as_enqueue_async_action' ) ) {
+		as_enqueue_async_action( 'acezilla_wc_products_batch', array( 1 ), ACEZILLA_WC_GROUP );
+	} else {
+		wp_schedule_single_event( time() + 5, 'acezilla_wc_products_batch', array( 1 ) );
+	}
+}
+
+/** After the plugin is updated to a version that sends products, send the product list once. */
+function acezilla_wc_maybe_sync_products() {
+	if ( ! acezilla_wc_conn() ) {
+		return;
+	}
+	$s = acezilla_wc_state();
+	if ( empty( $s['products_v'] ) || ACEZILLA_WC_VERSION !== $s['products_v'] ) {
+		acezilla_wc_enqueue_products();
+		// Orders sent before this version have no product lines: send the last 90 days once more (safe to repeat).
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( 'acezilla_wc_backfill_batch', array( 1 ), ACEZILLA_WC_GROUP );
+		}
+	}
 }
 
 /** One sentence the owner can act on after a history import. */
@@ -389,6 +523,7 @@ function acezilla_wc_handle_connect() {
 		$r = acezilla_wc_send( 'ping', array( 'info' => acezilla_wc_info() ) );
 		if ( $r['ok'] && class_exists( 'WooCommerce' ) ) {
 			list( , $text ) = acezilla_wc_backfill_message( acezilla_wc_backfill_batch( 1 ) );
+			acezilla_wc_enqueue_products();
 			acezilla_wc_notice( 'success', __( 'Connected to acezilla. ', 'acezilla-for-woocommerce' ) . $text );
 		} else {
 			acezilla_wc_notice( $r['ok'] ? 'success' : 'error', $r['ok'] ? __( 'Connected to acezilla.', 'acezilla-for-woocommerce' ) : __( 'Paired, but acezilla did not answer the first test: ', 'acezilla-for-woocommerce' ) . $r['error'] );
@@ -435,6 +570,7 @@ function acezilla_wc_handle_backfill() {
 	}
 	acezilla_wc_state( array( 'backfill_sent' => 0, 'backfill_done' => 0 ) );
 	list( $type, $text ) = acezilla_wc_backfill_message( acezilla_wc_backfill_batch( 1 ) );
+	acezilla_wc_enqueue_products();
 	acezilla_wc_notice( $type, $text );
 	acezilla_wc_back();
 }

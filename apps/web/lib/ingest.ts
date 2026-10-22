@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Dataset } from "@acezilla/connectors";
+import type { Dataset, WooLine, WooProduct } from "@acezilla/connectors";
 
 const CHUNK = 500;
 const chunks = <T,>(a: T[]) => Array.from({ length: Math.ceil(a.length / CHUNK) }, (_, i) => a.slice(i * CHUNK, (i + 1) * CHUNK));
@@ -50,7 +50,7 @@ export async function ingestDataset(sb: SupabaseClient, workspaceId: string, pla
 }
 
 /** Store orders from a connector: upserts the ones that count and removes any that stopped counting (cancelled, refunded). */
-export async function ingestOrders(sb: SupabaseClient, workspaceId: string, orders: Dataset["orders"], removeIds: string[]) {
+export async function ingestOrders(sb: SupabaseClient, workspaceId: string, orders: Dataset["orders"], removeIds: string[], lines?: WooLine[]) {
   const rows = orders.map((o) => ({ workspace_id: workspaceId, external_id: o.externalId, created_at: o.createdAt, revenue: o.revenue, customer_id: o.customerId || null, utm: o.utm, click_ids: o.clickIds }));
   for (const part of chunks(rows)) {
     const { error } = await sb.from("order").upsert(part, { onConflict: "workspace_id,external_id" });
@@ -60,5 +60,34 @@ export async function ingestOrders(sb: SupabaseClient, workspaceId: string, orde
     const { error } = await sb.from("order").delete().eq("workspace_id", workspaceId).in("external_id", part.map((p) => p.id));
     if (error) throw new Error(`order: ${error.message}`);
   }
+  // Order lines (what was bought) are replaced per order, since items can change after the first push. Only when the sender provides them.
+  if (lines) {
+    const orderIds = [...new Set([...orders.map((o) => o.externalId), ...removeIds])];
+    for (const part of chunks(orderIds.map((id) => ({ id })))) {
+      const { error } = await sb.from("order_line").delete().eq("workspace_id", workspaceId).eq("platform", "woocommerce").in("order_id", part.map((p) => p.id));
+      if (error) throw new Error(`order_line: ${error.message}`);
+    }
+    const at = new Map(orders.map((o) => [o.externalId, o.createdAt]));
+    const lineRows = lines.filter((l) => at.has(l.orderExternalId)).map((l) => ({ workspace_id: workspaceId, platform: "woocommerce", line_key: l.lineKey, order_id: l.orderExternalId, offer_id: l.productId, name: l.name, qty: l.qty, unit_price: l.unitPrice, bought_at: at.get(l.orderExternalId)! }));
+    for (const part of chunks(lineRows)) {
+      const { error } = await sb.from("order_line").upsert(part, { onConflict: "workspace_id,platform,line_key" });
+      if (error) throw new Error(`order_line: ${error.message}`);
+    }
+  }
   return { orders: rows.length, removed: removeIds.length };
+}
+
+/** The store's product catalogue (including products that never sold). Upserts what was sent and removes deleted products. */
+export async function ingestProducts(sb: SupabaseClient, workspaceId: string, platform: "woocommerce", products: WooProduct[], removeIds: string[]) {
+  const now = new Date().toISOString();
+  const rows = products.map((p) => ({ workspace_id: workspaceId, platform, external_id: p.externalId, name: p.name, sku: p.sku, price: p.price, status: p.status, stock_status: p.stockStatus, product_type: p.productType, total_sales: p.totalSales, updated_at: now }));
+  for (const part of chunks(rows)) {
+    const { error } = await sb.from("store_product").upsert(part, { onConflict: "workspace_id,platform,external_id" });
+    if (error) throw new Error(`store_product: ${error.message}`);
+  }
+  if (removeIds.length) {
+    const { error } = await sb.from("store_product").delete().eq("workspace_id", workspaceId).eq("platform", platform).in("external_id", removeIds);
+    if (error) throw new Error(`store_product: ${error.message}`);
+  }
+  return { products: rows.length, removed: removeIds.length };
 }

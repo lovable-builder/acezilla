@@ -12,6 +12,8 @@ export const COUNTED_STATUSES = ["completed", "processing", "on-hold"];
 export const WOO_ID_PREFIX = "woo:";
 export const SIGNATURE_MAX_SKEW_S = 300;
 export const MAX_ORDERS_PER_PUSH = 100;
+export const MAX_PRODUCTS_PER_PUSH = 200;
+const MAX_ITEMS_PER_ORDER = 100;
 const CLICK_IDS = ["gclid", "wbraid", "gbraid", "fbclid", "ttclid", "msclkid"];
 const UTM_KEYS = ["source", "medium", "campaign", "content", "term"];
 
@@ -56,9 +58,14 @@ export function verifyWooSignature(o: { secret: string; timestamp: string | null
 
 // ---- what the plugin sends ----
 export interface WooInfo { currency: string | null; siteName: string | null; pluginVersion: string | null; wooVersion: string | null; wpVersion: string | null; attribution: boolean | null }
+/** A product in the store's catalogue. Variations are not sent; only the parent product. */
+export interface WooProduct { externalId: string; name: string; sku: string | null; price: number | null; status: string; stockStatus: string | null; productType: string | null; totalSales: number }
+/** One line of a counted order: which product, how many, and what the customer paid for it before tax. */
+export interface WooLine { lineKey: string; orderExternalId: string; productId: string; name: string | null; qty: number; unitPrice: number }
 export type WooPush =
   | { type: "ping"; info: WooInfo }
-  | { type: "orders"; orders: Order[]; remove: string[]; /** Why each uncounted order was left out, by order id. */ removed: { id: string; reason: string }[]; currency: string | null }
+  | { type: "products"; products: WooProduct[]; remove: string[] }
+  | { type: "orders"; orders: Order[]; lines: WooLine[]; remove: string[]; /** Why each uncounted order was left out, by order id. */ removed: { id: string; reason: string }[]; currency: string | null }
   | { type: "disconnect" };
 
 const num = (v: unknown) => { const n = typeof v === "string" || typeof v === "number" ? Number(v) : NaN; return Number.isFinite(n) ? n : 0; };
@@ -70,8 +77,36 @@ const pick = (o: unknown, keys: string[]) => {
   return out;
 };
 
+/** One product from the plugin, or null if it is not shaped like one. A product in the trash is reported for removal. */
+export function mapPushedProduct(raw: unknown): { keep: WooProduct } | { remove: string } | null {
+  const p = raw as Record<string, unknown> | null;
+  if (!p || typeof p !== "object" || typeof p.id !== "number" || !Number.isInteger(p.id) || p.id <= 0) return null;
+  const externalId = String(p.id);
+  const status = String(p.status ?? "publish").slice(0, 20);
+  if (status === "trash") return { remove: externalId };
+  const name = str(p.name, 200);
+  if (!name) return null;
+  const price = typeof p.price === "number" || (typeof p.price === "string" && p.price.trim() !== "") ? num(p.price) : null;
+  return { keep: { externalId, name, sku: str(p.sku, 60), price: price !== null && price >= 0 && price < 1e9 ? round2(price) : null, status, stockStatus: str(p.stock_status, 20), productType: str(p.type, 20), totalSales: Math.max(0, Math.min(1e9, Math.round(num(p.total_sales)))) } };
+}
+
+/** The order lines the plugin sends with an order, cleaned. Bad lines are dropped, never trusted. */
+function mapOrderLines(orderExternalId: string, items: unknown): WooLine[] {
+  if (!Array.isArray(items)) return [];
+  const out: WooLine[] = [];
+  for (const it of items.slice(0, MAX_ITEMS_PER_ORDER)) {
+    const i = it as Record<string, unknown> | null;
+    if (!i || typeof i.id !== "number" || !Number.isInteger(i.id) || typeof i.product_id !== "number" || !Number.isInteger(i.product_id) || i.product_id <= 0) continue;
+    const qty = Math.round(num(i.qty));
+    const total = num(i.total);
+    if (qty < 1 || qty > 100000 || total < 0 || total > 1e9) continue;
+    out.push({ lineKey: `${orderExternalId}:${i.id}`, orderExternalId, productId: String(i.product_id), name: str(i.name, 200), qty, unitPrice: round2(total / qty) });
+  }
+  return out;
+}
+
 /** One order from the plugin. Revenue is total minus tax, shipping and refunds, so it is comparable to ad-platform revenue. */
-export function mapPushedOrder(raw: unknown): { keep: Order } | { remove: string; reason: string } | null {
+export function mapPushedOrder(raw: unknown): { keep: Order; lines: WooLine[] } | { remove: string; reason: string } | null {
   const o = raw as Record<string, unknown> | null;
   if (!o || typeof o !== "object" || typeof o.id !== "number" || !Number.isInteger(o.id) || o.id <= 0) return null;
   const t = typeof o.created_gmt === "string" ? new Date(o.created_gmt) : null;
@@ -83,7 +118,7 @@ export function mapPushedOrder(raw: unknown): { keep: Order } | { remove: string
   const cid = typeof o.customer_id === "number" ? o.customer_id : 0;
   const hash = typeof o.email_hash === "string" && /^[0-9a-f]{64}$/.test(o.email_hash) ? o.email_hash : null;
   const customerId = cid > 0 ? `${WOO_ID_PREFIX}c${cid}` : hash ? `${WOO_ID_PREFIX}h${createHash("sha256").update(hash).digest("hex").slice(0, 16)}` : "";
-  return { keep: { externalId, createdAt: t.toISOString(), revenue, customerId, utm: pick(o.utm, UTM_KEYS), clickIds: pick(o.click_ids, CLICK_IDS) } };
+  return { keep: { externalId, createdAt: t.toISOString(), revenue, customerId, utm: pick(o.utm, UTM_KEYS), clickIds: pick(o.click_ids, CLICK_IDS) }, lines: mapOrderLines(externalId, o.items) };
 }
 
 /** Validates a signed request body. Returns null if it is not something the plugin would send. */
@@ -95,6 +130,12 @@ export function parseWooPush(body: unknown): WooPush | null {
     const i = (b.info ?? {}) as Record<string, unknown>;
     return { type: "ping", info: { currency: str(i.currency, 8), siteName: str(i.site_name, 120), pluginVersion: str(i.plugin_version, 20), wooVersion: str(i.wc_version, 20), wpVersion: str(i.wp_version, 20), attribution: typeof i.attribution === "boolean" ? i.attribution : null } };
   }
+  if (b.type === "products") {
+    if (!Array.isArray(b.products) || b.products.length === 0 || b.products.length > MAX_PRODUCTS_PER_PUSH) return null;
+    const mapped = b.products.map(mapPushedProduct);
+    if (mapped.some((m) => m === null)) return null;
+    return { type: "products", products: mapped.flatMap((m) => (m && "keep" in m ? [m.keep] : [])), remove: mapped.flatMap((m) => (m && "remove" in m ? [m.remove] : [])) };
+  }
   if (b.type === "order" || b.type === "orders") {
     const list = b.type === "order" ? [b.order] : b.orders;
     if (!Array.isArray(list) || list.length === 0 || list.length > MAX_ORDERS_PER_PUSH) return null;
@@ -104,6 +145,7 @@ export function parseWooPush(body: unknown): WooPush | null {
     return {
       type: "orders",
       orders: mapped.flatMap((m) => (m && "keep" in m ? [m.keep] : [])),
+      lines: mapped.flatMap((m) => (m && "keep" in m ? m.lines : [])),
       remove: mapped.flatMap((m) => (m && "remove" in m ? [m.remove] : [])),
       removed: mapped.flatMap((m) => (m && "remove" in m ? [{ id: m.remove, reason: m.reason }] : [])),
       currency: str(first?.currency, 8),
