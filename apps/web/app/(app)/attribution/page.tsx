@@ -6,8 +6,8 @@ import { Card } from "@/components/ui/card";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money, PLATFORM, x } from "@/lib/format";
 import { parsePeriod, periodQs, todayIso, windowStart } from "@/lib/period";
-import { loadAdRows, loadOfferProfit, loadOrders } from "@/lib/data";
-import { saveOfferCost, saveVatRate } from "./actions";
+import { loadAdImports, loadAdRows, loadOfferProfit, loadOrders } from "@/lib/data";
+import { deleteAdsReport, importAdsReport, saveOfferCost, saveVatRate } from "./actions";
 
 export const metadata = { title: "Attribution · acezilla" };
 export const dynamic = "force-dynamic";
@@ -35,6 +35,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
 
   // Allegro offers (profit per offer)
   const profit = await loadOfferProfit(supabase, current.id, start, endDate);
+  const adImports = profit ? await loadAdImports(supabase, current.id) : [];
 
   const noData = orders.length === 0 && !d && !profit;
   return (
@@ -144,6 +145,41 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
                 {profit.accountLevel.total !== 0 && <tr><td style={{ textAlign: "left", color: "var(--ink3)" }}>Account-level costs (subscription and charges not tied to an offer)</td><td /><td /><td>{money(profit.accountLevel.total, cur)}</td><td /><td /><td /><td /><td /></tr>}
               </tbody>
             </table>
+          </Card>
+          <Card id="ads-report" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <h2 className="h2" style={{ margin: 0 }}>Exact ad cost per offer</h2>
+            <p className="sub" style={{ margin: 0, fontSize: 13 }}>
+              {adImports.length === 0
+                ? "Allegro does not say which listing each ad charge belongs to, so ad cost is split equally across your offers. For the exact figures, open Allegro Ads, copy or download the campaign table (it has “Koszt brutto” per clicked offer), and add it here."
+                : "Imported reports give each offer its real ad cost. Ad charges the report does not cover are still split equally."}
+            </p>
+            <form action={importAdsReport} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input type="hidden" name="qs" value={qs} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span className="eyebrow">Report covers</span>
+                <input type="date" name="from" className="field" required aria-label="First day" defaultValue={start} style={{ padding: "5px 8px" }} />
+                <span className="eyebrow">to</span>
+                <input type="date" name="to" className="field" required aria-label="Last day" defaultValue={endDate} style={{ padding: "5px 8px" }} />
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <input type="file" name="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="field" aria-label="Report file" style={{ padding: "5px 8px" }} />
+                <span className="eyebrow">or paste the table</span>
+              </div>
+              <textarea name="text" rows={3} className="field" placeholder="Paste the table copied from Allegro Ads, including the header row" aria-label="Pasted report" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12 }} />
+              <div><Button variant="outline" size="sm">Import report</Button></div>
+            </form>
+            {adImports.length > 0 && (
+              <table className="t tabnum">
+                <thead><tr><th style={{ textAlign: "left" }}>Imported report</th><th>Offers</th><th>Gross cost</th><th /></tr></thead>
+                <tbody>{adImports.map((b) => (
+                  <tr key={b.batchId}>
+                    <td style={{ textAlign: "left" }}>{b.from} to {b.to}</td><td>{int(b.offers)}</td><td>{money(b.cost, cur)}</td>
+                    <td><form action={deleteAdsReport}><input type="hidden" name="qs" value={qs} /><input type="hidden" name="batch" value={b.batchId} /><Button variant="ghost" size="sm">Remove</Button></form></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+            <p className="sub" style={{ margin: 0, fontSize: 12 }}>The report has one total for its whole date range, so its cost is spread evenly over those days when you view a shorter period.</p>
           </Card>
           <p className="sub" style={{ fontSize: 12, margin: 0 }}>Profit = net sales − Allegro fees − ads − cost of goods. ACoS is ad cost as a share of net sales; break-even ACoS is the highest it could be before the offer stops making money. Allegro does not tie campaign charges, delivery fees or the subscription to one offer, so they are split across the offers that sold: ads equally per offer (the average ad spend per offer), the subscription by share of sales, delivery by share of units. Hover a Fees or Ads figure to see how much of it is shared. If offer detail is empty, open Connections → Allegro and click Sync now once.</p>
         </section>

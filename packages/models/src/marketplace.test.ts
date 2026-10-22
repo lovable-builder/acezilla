@@ -64,6 +64,16 @@ test("when nothing sold, shared costs stay at account level and still reduce pro
   assert.equal(r.accountLevel.total, 30); assert.equal(r.totals.profit, -30);
 });
 
+test("an imported Ads report gives exact ad cost per offer and replaces that much of the untied ad charges", () => {
+  const imp = (offerId: string, amount: number) => ({ ...F("ads", offerId, amount), imported: true });
+  const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map(), lines: [L("a", 1, 100), L("b", 1, 100)],
+    fees: [F("ads", null, 100), imp("a", 60), imp("c", 20)] }); // billing says 100 was spent; the report accounts for 80 of it
+  const by = Object.fromEntries(r.offers.map((o) => [o.offerId, o]));
+  assert.equal(by.a!.ads, 70); assert.equal(by.b!.ads, 10); // a: 60 exact + half of the 20 left over; b: half of the 20
+  assert.equal(by.c!.ads, 20); assert.equal(by.c!.units, 0); // advertised but sold nothing: still shown, as a cost
+  assert.equal(r.totals.ads, 100); // never more than was paid
+});
+
 test("refunds (negative fee amounts) reduce costs", () => {
   const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map([["a", 0]]), lines: [L("a", 1, 100)], fees: [F("ads", "a", 20), F("ads", "a", -5)] });
   assert.equal(r.offers[0]!.ads, 15);

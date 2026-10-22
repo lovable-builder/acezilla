@@ -1,7 +1,11 @@
 /** Per-offer profit for a marketplace seller (Allegro): what each offer earned after fees, ads and the cost of the goods. */
 export type FeeCategory = "commission" | "ads" | "delivery" | "fulfillment" | "other";
 export interface LineRow { offerId: string; name: string | null; qty: number; unitPrice: number; boughtAt: string }
-export interface FeeRow { category: FeeCategory; offerId: string | null; amount: number; occurredAt: string }
+export interface FeeRow {
+  category: FeeCategory; offerId: string | null; amount: number; occurredAt: string;
+  /** From an uploaded Allegro Ads report: exact cost per offer. It replaces the same amount of untied ad charges so nothing is counted twice. */
+  imported?: boolean;
+}
 
 export interface OfferProfit {
   offerId: string; name: string; units: number;
@@ -42,13 +46,16 @@ export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: M
   };
   for (const l of o.lines) if (inRange(l.boughtAt)) { const p = get(l.offerId, l.name); p.units += l.qty; p.revenue += net(l.unitPrice * l.qty); }
   const account = empty();
+  let imported = 0;
   for (const f of o.fees) {
     if (!inRange(f.occurredAt)) continue;
     const v = net(f.amount);
+    if (f.imported && f.offerId) { get(f.offerId, null).ads += v; imported += v; continue; }
     if (!f.offerId) { account[f.category] += v; continue; }
     const p = get(f.offerId, null);
     if (f.category === "ads") p.ads += v; else { p[f.category] += v; p.fees += v; }
   }
+  account.ads = Math.max(0, account.ads - imported);
   // Campaign charges, delivery and the subscription are not tied to one offer by Allegro. Leaving them out would show every offer
   // as profitable while the account loses money, so they are shared across the offers that sold: ads equally per offer (the average ad
   // spend per offer), subscription and other by share of sales, delivery by share of units. The shared part is kept on each offer so the table can say so.
