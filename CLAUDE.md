@@ -8,3 +8,4 @@
 - **Numbers:** show figures with `tabular-nums`. Show modeled ROAS next to platform ROAS wherever ROAS appears.
 - **Language:** TypeScript strict mode.
 - **Tests:** write tests for connectors (mock the HTTP layer), the rule engine and the attribution maths.
+- **Architecture:** `ARCHITECTURE.md` describes how the repo is structured and how each platform connects. Read it first, and keep it up to date when the structure changes.
