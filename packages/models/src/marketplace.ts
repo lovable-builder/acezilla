@@ -6,6 +6,7 @@ export interface FeeRow { category: FeeCategory; offerId: string | null; amount:
 export interface OfferProfit {
   offerId: string; name: string; units: number;
   revenue: number; commission: number; delivery: number; fulfillment: number; other: number; fees: number; ads: number;
+  /** Part of fees and ads that Allegro does not tie to an offer (campaign charges, delivery, subscription), shared across offers. Already included in fees and ads. */ shared: number;
   /** Revenue minus fees and ads, before the cost of the goods. */ profitBeforeCost: number;
   unitCost: number | null; profit: number | null;
   /** Ad cost as a share of revenue. */ acos: number | null;
@@ -14,7 +15,7 @@ export interface OfferProfit {
 }
 export interface OfferProfitReport {
   offers: OfferProfit[];
-  /** Fees Allegro does not tie to an offer (subscription, some campaign charges). Counted in totals, never spread over offers. */
+  /** Fees that could not be shared because no offer sold in the period. Normally zero: otherwise they are shared across the offers that sold. */
   accountLevel: { total: number; byCategory: Record<FeeCategory, number> };
   totals: { revenue: number; fees: number; ads: number; goodsCost: number; profit: number; units: number };
   /** Offers that sold but have no unit cost, so their profit is not final. */ missingCosts: number;
@@ -35,7 +36,7 @@ export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: M
   const m = new Map<string, OfferProfit>();
   const get = (id: string, name: string | null) => {
     let p = m.get(id);
-    if (!p) { p = { offerId: id, name: name || o.names?.get(id) || `Offer ${id}`, units: 0, revenue: 0, commission: 0, delivery: 0, fulfillment: 0, other: 0, fees: 0, ads: 0, profitBeforeCost: 0, unitCost: null, profit: null, acos: null, breakEvenAcos: null, status: "unknown" }; m.set(id, p); }
+    if (!p) { p = { offerId: id, name: name || o.names?.get(id) || `Offer ${id}`, units: 0, revenue: 0, commission: 0, delivery: 0, fulfillment: 0, other: 0, fees: 0, ads: 0, shared: 0, profitBeforeCost: 0, unitCost: null, profit: null, acos: null, breakEvenAcos: null, status: "unknown" }; m.set(id, p); }
     else if (name && p.name.startsWith("Offer ")) p.name = name;
     return p;
   };
@@ -47,6 +48,20 @@ export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: M
     if (!f.offerId) { account[f.category] += v; continue; }
     const p = get(f.offerId, null);
     if (f.category === "ads") p.ads += v; else { p[f.category] += v; p.fees += v; }
+  }
+  // Campaign charges, delivery and the subscription are not tied to one offer by Allegro. Leaving them out would show every offer
+  // as profitable while the account loses money, so they are shared across the offers that sold: ads, subscription and other
+  // by share of sales, delivery by share of units. The shared part is kept on each offer so the table can say so.
+  const sold = [...m.values()].filter((p) => p.revenue > 0);
+  const totalRev = sold.reduce((a, p) => a + p.revenue, 0), totalUnits = sold.reduce((a, p) => a + p.units, 0);
+  if (totalRev > 0) {
+    for (const p of sold) {
+      const byRev = p.revenue / totalRev, byUnits = totalUnits > 0 ? p.units / totalUnits : byRev;
+      p.ads += account.ads * byRev; p.shared += account.ads * byRev;
+      for (const k of ["commission", "fulfillment", "other"] as const) { p[k] += account[k] * byRev; p.fees += account[k] * byRev; p.shared += account[k] * byRev; }
+      p.delivery += account.delivery * byUnits; p.fees += account.delivery * byUnits; p.shared += account.delivery * byUnits;
+    }
+    for (const k of Object.keys(account) as FeeCategory[]) account[k] = 0;
   }
   let goods = 0, missing = 0;
   const offers = [...m.values()].map((p) => {
@@ -60,7 +75,7 @@ export function buildOfferProfit(o: { lines: LineRow[]; fees: FeeRow[]; costs: M
     } else if (p.units > 0) missing++;
     return p;
   }).sort((a, b) => b.revenue - a.revenue || b.ads - a.ads);
-  for (const p of offers) for (const k of ["revenue", "commission", "delivery", "fulfillment", "other", "fees", "ads", "profitBeforeCost"] as const) p[k] = r2(p[k]);
+  for (const p of offers) for (const k of ["revenue", "commission", "delivery", "fulfillment", "other", "fees", "ads", "shared", "profitBeforeCost"] as const) p[k] = r2(p[k]);
   for (const p of offers) { if (p.profit !== null) p.profit = r2(p.profit); if (p.acos !== null) p.acos = Math.round(p.acos * 10000) / 10000; if (p.breakEvenAcos !== null) p.breakEvenAcos = Math.round(p.breakEvenAcos * 10000) / 10000; }
   const accountTotal = Object.values(account).reduce((a, b) => a + b, 0);
   const sum = (k: "revenue" | "fees" | "ads" | "units") => offers.reduce((a, p) => a + p[k], 0);

@@ -127,7 +127,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
                 {profit.offers.map((o) => (
                   <tr key={o.offerId}>
                     <td style={{ textAlign: "left", maxWidth: 260, overflowWrap: "anywhere" }}>{o.name}{o.status === "loss" && <span className="seo-chip seo-chip-missing" style={{ marginLeft: 8 }}>Losing money</span>}{o.status === "thin" && <span className="seo-chip seo-chip-attention" style={{ marginLeft: 8 }}>Thin margin</span>}</td>
-                    <td>{int(o.units)}</td><td>{money(o.revenue, cur)}</td><td>{money(o.fees, cur)}</td><td>{money(o.ads, cur)}</td>
+                    <td>{int(o.units)}</td><td>{money(o.revenue, cur)}</td><td title={o.shared > 0 ? `Includes ${money(o.shared, cur)} of shared costs (campaign charges, delivery, subscription), split across offers by sales or units` : undefined}>{money(o.fees, cur)}</td><td title={o.shared > 0 ? "Includes campaign ad charges Allegro does not tie to one offer, split by share of sales" : undefined}>{money(o.ads, cur)}</td>
                     <td>{pct(o.acos, 1)}</td>
                     <td>
                       <form action={saveOfferCost} style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
@@ -145,7 +145,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
               </tbody>
             </table>
           </Card>
-          <p className="sub" style={{ fontSize: 12, margin: 0 }}>Profit = net sales − Allegro fees − ads − cost of goods. ACoS is ad cost as a share of net sales; break-even ACoS is the highest it could be before the offer stops making money. Charges Allegro does not tie to an offer stay in the account-level line and are counted in the totals. If offer detail is empty, open Connections → Allegro and click Sync now once.</p>
+          <p className="sub" style={{ fontSize: 12, margin: 0 }}>Profit = net sales − Allegro fees − ads − cost of goods. ACoS is ad cost as a share of net sales; break-even ACoS is the highest it could be before the offer stops making money. Allegro does not tie campaign charges, delivery fees or the subscription to one offer, so they are split across the offers that sold: ads and subscription by share of sales, delivery by share of units. Hover a Fees or Ads figure to see how much of it is shared. If offer detail is empty, open Connections → Allegro and click Sync now once.</p>
         </section>
       )}
     </>

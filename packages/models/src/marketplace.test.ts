@@ -39,13 +39,29 @@ test("losing and thin offers are named; ads on an offer that sold nothing still 
   assert.equal(by.dud!.units, 0); assert.equal(by.dud!.ads, 25); assert.equal(by.dud!.acos, null); assert.equal(by.dud!.profit, -25 - 0);
 });
 
-test("fees without an offer are account-level costs: counted in totals, never spread; the period filter applies", () => {
+test("fees without an offer are shared across the offers that sold, so no offer looks profitable on a losing account; the period filter applies", () => {
   const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map([["a", 0]]),
     lines: [L("a", 1, 100), L("a", 1, 999, "2026-09-30T23:00:00Z")],
     fees: [F("other", null, 10), F("ads", null, 5), F("commission", "a", 15), F("commission", "a", 500, "2026-11-02T00:00:00Z")] });
-  assert.equal(r.offers.length, 1); assert.equal(r.offers[0]!.revenue, 100); assert.equal(r.offers[0]!.fees, 15);
-  assert.equal(r.accountLevel.total, 15); assert.deepEqual([r.accountLevel.byCategory.other, r.accountLevel.byCategory.ads], [10, 5]);
-  assert.equal(r.totals.profit, 70); // 100 - 15 - 15
+  const a = r.offers[0]!;
+  assert.equal(r.offers.length, 1); assert.equal(a.revenue, 100);
+  assert.equal(a.fees, 25); assert.equal(a.ads, 5); assert.equal(a.shared, 15);
+  assert.equal(a.profit, 70); assert.equal(r.accountLevel.total, 0); assert.equal(r.totals.profit, 70); // 100 - 25 - 5
+});
+
+test("shared ads and subscription follow sales, shared delivery follows units, and totals never change", () => {
+  const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map([["a", 0], ["b", 0]]),
+    lines: [L("a", 3, 10), L("b", 1, 70)], // a: 3 units, 30 sales; b: 1 unit, 70 sales
+    fees: [F("ads", null, 100), F("delivery", null, 40)] });
+  const by = Object.fromEntries(r.offers.map((o) => [o.offerId, o]));
+  assert.equal(by.a!.ads, 30); assert.equal(by.b!.ads, 70); // by sales
+  assert.equal(by.a!.delivery, 30); assert.equal(by.b!.delivery, 10); // by units
+  assert.equal(r.totals.ads, 100); assert.equal(r.totals.fees, 40); assert.equal(r.totals.profit, 100 - 100 - 40);
+});
+
+test("when nothing sold, shared costs stay at account level and still reduce profit", () => {
+  const r = buildOfferProfit({ ...P, vatRate: 0, costs: new Map(), lines: [], fees: [F("ads", null, 30)] });
+  assert.equal(r.accountLevel.total, 30); assert.equal(r.totals.profit, -30);
 });
 
 test("refunds (negative fee amounts) reduce costs", () => {
