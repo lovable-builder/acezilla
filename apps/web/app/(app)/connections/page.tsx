@@ -140,13 +140,6 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
             />
           </Section>
-
-          <Section n="3" title="Analytics" feeds="Feeds: on-site sessions and conversions. Optional.">
-            <Connector
-              logo={<BrandLogo brand="ga4" />} name="Google Analytics 4" desc="Sessions and on-site conversions"
-              connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
-            />
-          </Section>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
