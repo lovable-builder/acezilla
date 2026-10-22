@@ -10,8 +10,8 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 type Admin = ReturnType<typeof createAdminClient>;
 
 export function allegroEnv() {
-  const clientId = process.env.ALLEGRO_CLIENT_ID, clientSecret = process.env.ALLEGRO_CLIENT_SECRET, key = process.env.META_TOKEN_KEY;
-  return { clientId, clientSecret, sandbox: process.env.ALLEGRO_SANDBOX === "1", ready: !!(clientId && clientSecret && key && process.env.SUPABASE_SERVICE_ROLE_KEY), stateSecret: `${key ?? ""}:allegro-state` };
+  const clientId = process.env.ALLEGRO_CLIENT_ID, clientSecret = process.env.ALLEGRO_CLIENT_SECRET, key = process.env.META_TOKEN_KEY, userAgent = process.env.ALLEGRO_USER_AGENT?.trim();
+  return { clientId, clientSecret, userAgent, sandbox: process.env.ALLEGRO_SANDBOX === "1", ready: !!(clientId && clientSecret && userAgent && key && process.env.SUPABASE_SERVICE_ROLE_KEY), stateSecret: `${key ?? ""}:allegro-state` };
 }
 
 /**
@@ -27,9 +27,9 @@ export async function getAllegroAccessToken(admin: Admin, connectionId: string):
   };
   const row = await read();
   if (row.expires && new Date(row.expires).getTime() > Date.now() + 60_000) return row.t.a;
-  const { clientId, clientSecret, sandbox } = allegroEnv();
+  const { clientId, clientSecret, sandbox, userAgent } = allegroEnv();
   let fresh;
-  try { fresh = await refreshAllegroToken({ clientId: clientId!, clientSecret: clientSecret!, refreshToken: row.t.r, sandbox }); }
+  try { fresh = await refreshAllegroToken({ clientId: clientId!, clientSecret: clientSecret!, refreshToken: row.t.r, sandbox, userAgent }); }
   catch (e) {
     // Another request may have rotated the token while ours was refused (the old refresh token is dead the moment it is used).
     for (let i = 0; i < 4; i++) {
@@ -51,7 +51,7 @@ export interface AllegroStats { syncedAt: string; days: number; orders: number; 
 /** Orders (as store sales), ad spend per offer per day, a fee summary and today's offer counters. Read-only. */
 export async function syncAllegro(admin: Admin, conn: { id: string; workspace_id: string }, days: number) {
   const token = await getAllegroAccessToken(admin, conn.id);
-  const c = { accessToken: token, sandbox: allegroEnv().sandbox };
+  const c = { accessToken: token, sandbox: allegroEnv().sandbox, userAgent: allegroEnv().userAgent };
   const [{ lines, truncated }, fees, offers] = await Promise.all([loadAllegroSales(c, days), loadAllegroFees(c, days), loadAllegroOffers(c)]);
   const orders = salesToOrders(lines);
   const jwt = decodeAllegroJwt(token);

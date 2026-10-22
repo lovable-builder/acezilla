@@ -45,11 +45,11 @@ export function verifyAllegroState(secret: string, state: string | null, userId:
 }
 
 export interface AllegroTokens { accessToken: string; refreshToken: string; expiresInSec: number }
-interface TokenCtx { clientId: string; clientSecret: string; sandbox?: boolean; fetch?: typeof fetch }
+interface TokenCtx { clientId: string; clientSecret: string; sandbox?: boolean; fetch?: typeof fetch; /** Allegro blocks API keys whose calls lack a valid User-Agent (made in the Developer Apps generator). */ userAgent?: string }
 
 async function tokenRequest(c: TokenCtx, body: Record<string, string>): Promise<AllegroTokens> {
   const basic = Buffer.from(`${c.clientId}:${c.clientSecret}`).toString("base64");
-  const res = await (c.fetch ?? fetch)(allegroHosts(c.sandbox).token, { method: "POST", headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
+  const res = await (c.fetch ?? fetch)(allegroHosts(c.sandbox).token, { method: "POST", headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded", ...(c.userAgent ? { "User-Agent": c.userAgent } : {}) }, body: new URLSearchParams(body) });
   if (!res.ok) throw new AllegroApiError(res.status === 400 || res.status === 401 ? "Allegro rejected the login" : `Allegro token request failed (HTTP ${res.status})`, res.status, res.status === 400 || res.status === 401);
   const j = (await res.json().catch(() => null)) as { access_token?: string; refresh_token?: string; expires_in?: number } | null;
   if (!j?.access_token || !j.refresh_token || !j.expires_in) throw new AllegroApiError("Allegro returned an unexpected token response", 502);
@@ -68,14 +68,14 @@ export function decodeAllegroJwt(accessToken: string): { userName: string | null
 }
 
 // ---------------- API calls ----------------
-export interface AllegroCtx { accessToken: string; sandbox?: boolean; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> }
+export interface AllegroCtx { accessToken: string; userAgent?: string; sandbox?: boolean; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> }
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** GET with the headers Allegro requires. Retries rate limits (429) and server errors a few times; raw bodies never reach the caller. */
 export async function allegroGet(c: AllegroCtx, path: string, params: Record<string, string> = {}): Promise<any> {
   const url = `${allegroHosts(c.sandbox).api}${path}${Object.keys(params).length ? `?${new URLSearchParams(params)}` : ""}`;
   for (let attempt = 0; ; attempt++) {
-    const res = await (c.fetch ?? fetch)(url, { headers: { Authorization: `Bearer ${c.accessToken}`, Accept: ACCEPT } });
+    const res = await (c.fetch ?? fetch)(url, { headers: { Authorization: `Bearer ${c.accessToken}`, Accept: ACCEPT, ...(c.userAgent ? { "User-Agent": c.userAgent } : {}) } });
     if (res.ok) return res.json();
     if ((res.status === 429 || res.status >= 500) && attempt < 3) {
       const ra = Number(res.headers.get("retry-after"));

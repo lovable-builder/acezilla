@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   if (!code) return fail("Allegro did not return a login code");
 
   try {
-    const t = await exchangeAllegroCode({ clientId: env.clientId!, clientSecret: env.clientSecret!, code, redirectUri: `${url.origin}/api/connect/allegro/callback`, sandbox: env.sandbox });
+    const t = await exchangeAllegroCode({ clientId: env.clientId!, clientSecret: env.clientSecret!, code, redirectUri: `${url.origin}/api/connect/allegro/callback`, sandbox: env.sandbox, userAgent: env.userAgent });
     const row = {
       workspace_id: workspace.id, platform: "allegro", status: "active", last_error: null, scopes: [`v${ALLEGRO_SCOPE_VERSION}`, ...ALLEGRO_SCOPES],
       token_enc: encryptToken(JSON.stringify({ a: t.accessToken, r: t.refreshToken })), token_expires_at: new Date(Date.now() + t.expiresInSec * 1000).toISOString(),
