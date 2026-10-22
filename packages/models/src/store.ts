@@ -1,7 +1,7 @@
 import { shiftDate, type Kpi } from "./dashboard";
 
 /** One store order as saved by a store connector (WooCommerce today). Revenue is already net of tax, shipping and refunds. */
-export interface OrderRow { createdAt: string; revenue: number; customerId: string | null; utm: Record<string, string> | null; clickIds: Record<string, string> | null }
+export interface OrderRow { /** Order id as stored. Allegro orders start with "allegro:", WooCommerce orders with "woo:". */ externalId?: string; createdAt: string; revenue: number; customerId: string | null; utm: Record<string, string> | null; clickIds: Record<string, string> | null }
 
 export interface SourceRow { source: string; orders: number; revenue: number; share: number }
 export interface StoreSales {

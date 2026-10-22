@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { buildAttribution, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
+import { buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,31 @@ import { compact, delta, int, money, PLATFORM, x } from "@/lib/format";
 const PAGE = 1000;
 const tone = (good: boolean | null, dv: number | null) => dv === null || good === null ? "var(--ink3)" : (dv >= 0) === good ? "var(--pos)" : "var(--neg)";
 
-function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare }: { compare: boolean; store: StoreSales; cur: string; spendByDate: Map<string, number> | null; adSpend: number | null; platformRoas: number | null }) {
+const CHANNEL_LABEL: Record<string, string> = { woocommerce: "WooCommerce", allegro: "Allegro", shopify: "Shopify", other: "Other" };
+
+/** Every connected store or marketplace, including ones with no orders yet, so a connected store never looks missing. */
+function ChannelsCard({ channels, cur }: { channels: SalesChannelRow[]; cur: string }) {
+  return (
+    <Card style={{ overflowX: "auto" }}>
+      <h2 className="h2"><span className="n">A</span>Where orders were placed <span className="eyebrow" style={{ marginLeft: 8 }}>Your connected stores</span></h2>
+      <table className="t tabnum">
+        <thead><tr><th style={{ textAlign: "left" }}>Store</th><th>Orders</th><th>Revenue</th><th>Share</th></tr></thead>
+        <tbody>{channels.map((c) => (
+          <tr key={c.channel}>
+            <td style={{ textAlign: "left" }}>
+              <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, marginRight: 8, background: c.channel === "other" ? "var(--line2)" : "var(--pos)" }} />
+              {CHANNEL_LABEL[c.channel] ?? c.channel}
+              {c.orders === 0 && <span className="sub" style={{ marginLeft: 8, fontSize: 12 }}>connected, no orders in this period</span>}
+            </td>
+            <td>{int(c.orders)}</td><td>{money(c.revenue, cur)}</td><td>{(c.share * 100).toFixed(0)}%</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </Card>
+  );
+}
+
+function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare, channels }: { compare: boolean; channels: SalesChannelRow[]; store: StoreSales; cur: string; spendByDate: Map<string, number> | null; adSpend: number | null; platformRoas: number | null }) {
   const sRoas = adSpend ? storeRoas(store.revenue.value, adSpend) : null;
   const cells = [
     { label: "Store revenue", v: money(store.revenue.value, cur), d: store.revenue.deltaPct, good: true as boolean | null, s: store.revenue.series },
@@ -41,14 +65,15 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare }:
           </div>
         ))}
       </div>
+      {channels.length > 0 && <ChannelsCard channels={channels} cur={cur} />}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
         <Card>
-          <h2 className="h2"><span className="n">A</span>{spendByDate ? "Store revenue vs ad spend" : "Store revenue"}</h2>
+          <h2 className="h2"><span className="n">B</span>{spendByDate ? "Store revenue vs ad spend" : "Store revenue"}</h2>
           <RevenueChart series={chart} />
           <div className="eyebrow" style={{ display: "flex", gap: 16, marginTop: 6 }}><span style={{ color: "var(--accent-ink)" }}>— Store revenue</span>{spendByDate && <span>- - Ad spend</span>}</div>
         </Card>
         <Card style={{ overflowX: "auto" }}>
-          <h2 className="h2"><span className="n">B</span>Where orders came from</h2>
+          <h2 className="h2"><span className="n">C</span>Marketing sources <span className="eyebrow" style={{ marginLeft: 8 }}>What sent the customer</span></h2>
           {store.sources.length === 0 ? <p className="sub">No orders in this period.</p> : (
             <table className="t tabnum">
               <thead><tr><th style={{ textAlign: "left" }}>Source</th><th>Orders</th><th>Revenue</th><th>Share</th></tr></thead>
@@ -105,12 +130,13 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const sinceDate = shiftDate(period.endDate ?? new Date().toISOString().slice(0, 10), -(2 * period.windowDays + (period.endDate ? 2 : 14)));
   const since = `${sinceDate}T00:00:00Z`;
   for (let from = 0; from < 30 * PAGE; from += PAGE) {
-    const { data } = await supabase.from("order").select("created_at,revenue,utm,click_ids,customer_id").eq("workspace_id", current.id).gte("created_at", since).order("created_at", { ascending: false }).range(from, from + PAGE - 1);
-    for (const r of data ?? []) orderRows.push({ createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
+    const { data } = await supabase.from("order").select("external_id,created_at,revenue,utm,click_ids,customer_id").eq("workspace_id", current.id).gte("created_at", since).order("created_at", { ascending: false }).range(from, from + PAGE - 1);
+    for (const r of data ?? []) orderRows.push({ externalId: r.external_id as string, createdAt: r.created_at as string, revenue: Number(r.revenue), customerId: (r.customer_id as string | null) ?? null, utm: (r.utm as Record<string, string> | null) ?? null, clickIds: (r.click_ids as Record<string, string> | null) ?? null });
     if ((data?.length ?? 0) < PAGE) break;
   }
   const { data: allConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id);
   const storeConns = (allConns ?? []).filter((c) => ["woocommerce", "allegro", "shopify"].includes(c.platform as string));
+  const connectedStores = storeConns.map((c) => c.platform as string);
   const adsConnected = (allConns ?? []).some((c) => ["meta", "google", "tiktok"].includes(c.platform as string));
   const storeNames = storeConns.map((c) => PLATFORM[c.platform as string]?.label ?? (c.platform as string).replace(/^./, (m) => m.toUpperCase()));
   const { data: wooConn } = await supabase.from("connection").select("last_error,stats").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
@@ -153,7 +179,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         <Sources ads={[]} stores={storeNames} />
         {checklist}
         {warningCard}
-        <StoreBlock compare={compare} store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
+        <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: store0.windowDays, endDate: store0.endDate })} compare={compare} store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ flex: 1, minWidth: 220 }}><b>Next: connect an ad platform.</b> Your store is connected, so this page already shows real sales. Add Meta or Google Ads to see what your ad spend returns.</span>
           <Button asChild><Link href="/connections">Connect an ad platform</Link></Button>
@@ -171,6 +197,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
           <p className="sub">Connect an ad account or your store to get your first briefing.</p>
         </div>
         {skippedCard}
+        {connectedStores.length > 0 && <ChannelsCard cur={current.currency} channels={buildChannels([], { connected: connectedStores, windowDays: period.windowDays, endDate: period.endDate ?? new Date().toISOString().slice(0, 10) })} />}
         {checklist}
         <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <b>Two connections give you the full picture</b>
@@ -284,7 +311,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         ))}
       </div>
 
-      {store && <StoreBlock store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={k.roas.value} compare={compare} />}
+      {store ? <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={k.roas.value} compare={compare} /> : connectedStores.length > 0 && <ChannelsCard cur={cur} channels={buildChannels([], { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} />}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
         <Card>
