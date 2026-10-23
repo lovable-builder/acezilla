@@ -127,7 +127,7 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare, c
             <span className="eyebrow"><Term>{c.label}</Term></span>
             <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.v}</span>
             {c.label === "Store ROAS"
-              ? <span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{x(platformRoas)} platform-reported</span>
+              ? <span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{platformRoas === null ? "ad spend ÷ store revenue" : `${x(platformRoas)} platform-reported`}</span>
               : <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{compare ? delta(c.d) : " "}</span>}
             {c.s.length > 0 && <Sparkline data={c.s} color="var(--accent)" />}
           </div>
