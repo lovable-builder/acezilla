@@ -302,8 +302,11 @@ table.t th:first-child, table.t td:first-child { text-align: left; }
 .bw-asset img, .bw-asset video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bw-asset .tag { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: rgb(0 0 0 / .62); color: #fff; font-size: 10px; }
 .bw-asset button { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgb(0 0 0 / .62); color: #fff; cursor: pointer; line-height: 1; font-size: 16px; }
-.ap-media img, .ap-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-media { position: relative; overflow: hidden; }
 .ap-media.has-media { padding: 0; background: var(--surface2); }
+.ap-media.has-media > img, .ap-media.has-media > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-media.ap-car.has-media { padding: 12px; }
+.ap-media.ap-car.has-media > img { position: static; height: 126px; min-width: 0; }
 .ap-phone-screen video, .ap-phone-screen img.ap-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .ap-hook { position: relative; z-index: 1; } .ap-phone-bottom { z-index: 1; }
 .ap-phone-screen .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(0 0 0 / .1), rgb(0 0 0 / .55)); }
