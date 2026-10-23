@@ -7,3 +7,4 @@ export * from "./attribution";
 export * from "./ai";
 export * from "./channels";
 export * from "./products";
+export * from "./media";

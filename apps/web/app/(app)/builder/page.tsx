@@ -2,10 +2,14 @@ import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/seo/copy-button";
-import { BUILDER_GOALS, BUILDER_LIMITS, type BuilderInput, type BuilderOutput } from "@acezilla/models";
+import { BUILDER_LIMITS, MEDIA_SPECS, type BuilderInput, type BuilderOutput } from "@acezilla/models";
+import { BuilderWizard } from "@/components/builder/wizard";
+import { AdPreview } from "@/components/builder/ad-preview";
+import { loadProducts } from "@/lib/data";
+import { todayIso, windowStart } from "@/lib/period";
 import Link from "next/link";
 import { ago } from "@/lib/format";
-import { approveDraft, createDraft, deleteDraft } from "./actions";
+import { approveDraft, deleteDraft } from "./actions";
 
 export const metadata = { title: "Campaign builder · acezilla" };
 export const dynamic = "force-dynamic";
@@ -23,6 +27,8 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
   const { supabase, current } = await getWorkspaceContext();
   if (!current) return <Card>No workspace found for this account.</Card>;
   const { data: drafts } = await supabase.from("campaign_draft").select("id,platform,title,status,created_at").eq("workspace_id", current.id).order("created_at", { ascending: false }).limit(12);
+  const { rows: prod } = await loadProducts(supabase, current.id, windowStart(todayIso(), 90), todayIso());
+  const catalog = prod.filter((r) => r.listed).slice(0, 200).map((r) => ({ id: r.productId, name: r.name, store: r.channel === "woocommerce" ? "WooCommerce" : r.channel === "allegro" ? "Allegro" : r.channel }));
   const openId = /^[0-9a-f-]{36}$/.test(sp.draft ?? "") ? sp.draft! : (drafts?.[0]?.id as string | undefined);
   const { data: open } = openId ? await supabase.from("campaign_draft").select("id,platform,title,status,brief,output,created_at").eq("id", openId).eq("workspace_id", current.id).maybeSingle() : { data: null };
   const out = open?.output as BuilderOutput | undefined, brief = open?.brief as BuilderInput | undefined;
@@ -33,35 +39,12 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
       <div>
         <div className="eyebrow">Plan</div>
         <h1 className="page">Campaign builder</h1>
-        <p className="sub">Describe what you want to advertise and get a campaign draft: audiences, ad texts within the platform limits, a budget split and a test plan. It is a draft for you to review. Nothing is sent to Meta, Google or TikTok.</p>
+        <p className="sub">Pick a platform and a goal, and get a campaign draft that follows that platform's formats and limits: ad texts with previews, audiences, a budget plan and a launch checklist. It is a draft for you to review. Nothing is sent to Meta, Google or TikTok.</p>
       </div>
       {sp.notice && <Card style={{ color: "var(--pos)" }}>{sp.notice}</Card>}
       {sp.error && <Card style={{ color: "var(--neg)" }}>{sp.error}</Card>}
 
-      <Card style={{ maxWidth: 720 }}>
-        <form action={createDraft} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Platform</span>
-              <select name="platform" className="field" defaultValue="meta">{Object.entries(PL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Goal</span>
-              <select name="goal" className="field" defaultValue="sales">{BUILDER_GOALS.map((g) => <option key={g} value={g}>{g.replace(/^./, (c) => c.toUpperCase())}</option>)}</select></label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Budget per day ({current.currency}, optional)</span>
-              <input name="budgetPerDay" className="field" inputMode="decimal" placeholder="e.g. 50" style={{ width: 150 }} /></label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Language of the ads</span>
-              <input name="language" className="field" defaultValue="English" style={{ width: 150 }} maxLength={30} /></label>
-          </div>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">What are you advertising?</span>
-            <textarea name="product" className="field" rows={3} required minLength={10} maxLength={600} placeholder="Handmade leather wallets made in Krakow, vegetable-tanned leather, 30-day returns" /></label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Offer or promotion (optional)</span>
-            <input name="offer" className="field" maxLength={300} placeholder="Free delivery over 200 PLN" /></label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Who is it for? (optional)</span>
-            <input name="audience" className="field" maxLength={300} placeholder="Men 25-45 buying gifts" /></label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Tone (optional)</span>
-            <input name="tone" className="field" maxLength={60} placeholder="Warm and direct" /></label>
-          <div><Button>Draft campaign</Button></div>
-          <div className="sub" style={{ margin: 0, fontSize: 12 }}>Drafting takes a few seconds. A short summary of what you type here is sent to Google's Gemini to write the draft.</div>
-        </form>
-      </Card>
+      <BuilderWizard currency={current.currency} brand={current.name} catalog={catalog} />
 
       {open && out && (
         <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -71,17 +54,40 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
             <span className={`seo-chip seo-chip-${open.status === "approved" ? "good" : "not_measured"}`}>{open.status === "approved" ? "Approved" : "Draft"}</span>
           </div>
           <div><div className="eyebrow">Audiences</div><ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.audiences.map((a) => <li key={a.name}><b>{a.name}</b>: {a.description}</li>)}</ul></div>
+          {out.spec && (out.spec.warnings.length > 0 || out.spec.checklist.length > 0) && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12 }}>
+              {out.spec.warnings.length > 0 && (
+                <div className="raise3d" style={{ border: "1px solid var(--warn)", borderRadius: 12, padding: 14 }}>
+                  <div className="eyebrow" style={{ color: "var(--warn)" }}>Check before launch</div>
+                  <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.spec.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                </div>
+              )}
+              {out.spec.checklist.length > 0 && (
+                <div className="raise3d" style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}>
+                  <div className="eyebrow">Have ready</div>
+                  <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>{out.spec.checklist.map((c) => <li key={c}>☐ {c}</li>)}</ul>
+                </div>
+              )}
+            </div>
+          )}
           <div>
-            <div className="eyebrow">Ad texts (limits: {BUILDER_LIMITS[platform].headline ? `headline ${BUILDER_LIMITS[platform].headline}, ` : ""}text {BUILDER_LIMITS[platform].text}{BUILDER_LIMITS[platform].description ? `, description ${BUILDER_LIMITS[platform].description}` : ""} characters)</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+            <div className="eyebrow">Ads · {out.variants.length} variants{out.spec?.ab ? " · first two are an A/B pair" : ""}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 14, marginTop: 8 }}>
               {out.variants.map((v, i) => (
-                <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                  <div style={{ minWidth: 200, flex: 1 }}>{v.headline && <b>{v.headline}</b>}<div style={{ overflowWrap: "anywhere" }}>{v.text}</div>{v.description && <div className="sub" style={{ margin: 0, fontSize: 13 }}>{v.description}</div>}<span className="eyebrow">Button: {v.cta}</span></div>
-                  <CopyButton text={[v.headline, v.text, v.description].filter(Boolean).join("\n")} label="Copy" />
+                <div key={i} className="rise" style={{ "--i": i, display: "flex", flexDirection: "column", gap: 8 } as React.CSSProperties}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <b style={{ fontWeight: 600 }}>Variant {String.fromCharCode(65 + i)}</b>
+                    {out.spec?.ab && i < 2 && <span className="seo-chip seo-chip-attention">A/B</span>}
+                    <span style={{ marginLeft: "auto" }}><CopyButton text={[v.headline, v.text, v.description, v.cta && `[${v.cta}]`, ...(out.hashtags ?? [])].filter(Boolean).join("\n")} label="Copy" /></span>
+                  </div>
+                  <AdPreview platform={platform} format={out.spec?.format ?? "single"} brand={current.name} headline={v.headline} text={v.text} description={v.description} cta={v.cta || undefined} hashtags={out.hashtags} hook={i === 0 ? out.hook : ""} />
                 </div>
               ))}
             </div>
+            <p className="sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Limits for {MEDIA_SPECS[platform].short}: {BUILDER_LIMITS[platform].headline ? `headline ${BUILDER_LIMITS[platform].headline}, ` : ""}text {BUILDER_LIMITS[platform].text}{BUILDER_LIMITS[platform].description ? `, description ${BUILDER_LIMITS[platform].description}` : ""} characters. Every variant is inside them.</p>
           </div>
+          {out.hook && <div><div className="eyebrow">Video hook (first 3 seconds)</div><p style={{ margin: "4px 0 0" }}>{out.hook}</p></div>}
+          {out.hashtags && out.hashtags.length > 0 && <div><div className="eyebrow">Hashtags</div><p className="mono" style={{ margin: "4px 0 0" }}>{out.hashtags.join(" ")}</p></div>}
           {out.keywords.length > 0 && <div><div className="eyebrow">Keywords</div><div className="mono" style={{ fontSize: 13, marginTop: 6 }}>{out.keywords.map((k) => `${k.term} (${k.matchType})`).join("  ·  ")}</div>{out.negativeKeywords.length > 0 && <div className="sub" style={{ fontSize: 13, marginBottom: 0 }}>Negative: {out.negativeKeywords.join(", ")}</div>}</div>}
           <div><div className="eyebrow">Budget</div><p style={{ margin: "4px 0 0" }}>{out.budgetNote}</p></div>
           <div><div className="eyebrow">Test plan</div><ol style={{ margin: "6px 0 0", paddingLeft: 18, listStyle: "decimal" }}>{out.testPlan.map((t) => <li key={t}>{t}</li>)}</ol></div>

@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { buildBuilderPrompt, BUILDER_MAX_TOKENS, BUILDER_SCHEMA, builderSystem, cleanBuilderInput, parseBuilderResponse } from "@acezilla/models";
+import { buildBuilderPrompt, buildSpec, BUILDER_MAX_TOKENS, BUILDER_SCHEMA, builderSystem, cleanBuilderInput, parseBuilderResponse } from "@acezilla/models";
 import type { JsonSchema } from "@acezilla/llm";
 import { AI_LIMITS, friendlyAiError, takeAiQuota } from "@/lib/ai-guard";
 import { getLlm } from "@/lib/llm";
@@ -15,15 +15,16 @@ export async function createDraft(formData: FormData) {
   let id: string;
   try {
     const { workspace, user } = await requireWriter();
-    const parsed = cleanBuilderInput(Object.fromEntries(formData.entries()));
+    const parsed = cleanBuilderInput({ ...Object.fromEntries(formData.entries()), items: formData.getAll("items").map(String) });
     if (!parsed.ok) return back(`error=${encodeURIComponent(parsed.error)}`);
     const input = parsed.value;
     if (!(await takeAiQuota(workspace.id, "builder"))) return back(`error=${encodeURIComponent(`You have used today's ${AI_LIMITS.builder} drafts for this workspace. It resets tomorrow.`)}`);
     const output = await getLlm().generateJson({
-      system: builderSystem(input.platform), user: buildBuilderPrompt(input), schema: BUILDER_SCHEMA as unknown as JsonSchema,
-      maxOutputTokens: BUILDER_MAX_TOKENS, temperature: 0.7, validate: (raw) => parseBuilderResponse(input.platform, raw),
+      system: builderSystem(input.platform, input.format), user: buildBuilderPrompt(input), schema: BUILDER_SCHEMA as unknown as JsonSchema,
+      maxOutputTokens: BUILDER_MAX_TOKENS, temperature: 0.7, validate: (raw) => parseBuilderResponse(input.platform, raw, input.format),
     });
-    const { data, error } = await createAdminClient().from("campaign_draft").insert({ workspace_id: workspace.id, created_by: user.id, platform: input.platform, title: output.campaignName, brief: input, output }).select("id").single();
+    const withSpec = { ...output, spec: buildSpec(input, workspace.currency) };
+    const { data, error } = await createAdminClient().from("campaign_draft").insert({ workspace_id: workspace.id, created_by: user.id, platform: input.platform, title: output.campaignName, brief: input, output: withSpec }).select("id").single();
     if (error || !data) throw new Error("Could not save the draft");
     id = data.id as string;
   } catch (e) {

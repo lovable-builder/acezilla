@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StoreSales } from "@acezilla/models";
+import { adviseCampaign, roasTone, todaysDecisions, buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,34 @@ function ProductsOverview({ rows, cur, stores }: { rows: ProductRow[]; cur: stri
           )}
         </div>
       </div>
+    </Card>
+  );
+}
+
+const ADVICE_CHIP: Record<string, string> = { stop: "missing", scale: "good", restore: "good", watch: "attention", too_early: "not_measured", paused: "not_measured" };
+
+/** The campaigns that need a person today. Suggestions only: acezilla never changes a live campaign. */
+function Decisions({ campaigns, cur }: { campaigns: { campaignId: string; name: string; platform: string; status: string; spend: number; roas: number | null }[]; cur: string }) {
+  const list = todaysDecisions(campaigns.filter((c) => c.platform !== "allegro").map((c) => ({ ...c })), { currency: cur });
+  return (
+    <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Today&apos;s decisions</h2>
+        <span className="eyebrow">Suggestions. You change campaigns in the ad platform.</span>
+      </div>
+      {list.length === 0 ? <p className="sub" style={{ margin: 0 }}>Nothing needs a decision right now.</p> : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          {list.map(({ campaign: c, advice: a }, i) => (
+            <li key={c.campaignId} className="rise" style={{ "--i": i, display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" } as React.CSSProperties}>
+              <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`} style={{ flexShrink: 0 }}>{a.label}</span>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <b style={{ fontWeight: 600 }}>{c.name}</b> <span className="eyebrow">{PLATFORM[c.platform]?.label ?? c.platform} · {money(c.spend, cur)} spent</span>
+                <div className="sub" style={{ margin: 0, fontSize: 13 }}>{a.reason}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }
@@ -332,6 +360,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         {!summary && <div className="sub" style={{ margin: 0 }}>A short, plain-language summary of the last 7 days written from your numbers. It is written when you ask, so opening this page never costs anything.</div>}
       </Card>
 
+      <Decisions campaigns={d.campaigns} cur={cur} />
+
       <Card>
         <h2 className="h2"><span className="n">··</span>Insights</h2>
         {insights.length === 0 ? <p className="sub">Nothing stands out in this period. Pick a longer period or a different range for more.</p> : (
@@ -403,16 +433,17 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <Card style={{ overflowX: "auto" }}>
         <h2 className="h2"><span className="n">04</span>Campaigns</h2>
         <table className="t tabnum">
-          <thead><tr><th>Campaign</th><th>Spend</th><th><Term>Platform ROAS</Term></th><th><Term>Modeled ROAS</Term></th><th><Term>CPA</Term></th><th>Status</th></tr></thead>
+          <thead><tr><th>Campaign</th><th>Spend</th><th><Term>Platform ROAS</Term></th><th><Term>Modeled ROAS</Term></th><th><Term>CPA</Term></th><th>Status</th><th style={{ textAlign: "left" }}>What to do</th></tr></thead>
           <tbody>
             {d.campaigns.map((c) => (
               <tr key={c.campaignId}>
                 <td><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 8, background: PLATFORM[c.platform]?.color }} />{c.name}</td>
                 <td>{money(c.spend, cur)}</td>
-                <td style={{ color: "var(--ink3)" }}>{x(c.roas)}</td>
+                <td style={{ color: ({ good: "var(--pos)", ok: "var(--warn)", bad: "var(--neg)", none: "var(--ink3)" } as const)[roasTone(c.roas)], fontWeight: 600 }} title="Green from 2x, amber from 1x, red below 1x">{x(c.roas)}</td>
                 {(() => { const m = attr.campaigns.get(c.campaignId); return <td style={{ fontWeight: 600 }} title={m ? `${m.orders} store orders tagged with this campaign` : "No store orders are tagged with this campaign's name (utm_campaign)"}>{m?.modeledRoas == null ? "—" : x(m.modeledRoas)}</td>; })()}
                 <td>{c.cpa === null ? "—" : money(c.cpa, cur)}</td>
                 <td style={{ color: c.status === "active" ? "var(--pos)" : "var(--ink3)" }}>{c.status}</td>
+                {(() => { const a = c.platform === "allegro" ? null : adviseCampaign(c, { currency: cur }); return <td style={{ textAlign: "left" }} title={a?.reason}>{a ? <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`}>{a.label}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>}</td>; })()}
               </tr>
             ))}
           </tbody>

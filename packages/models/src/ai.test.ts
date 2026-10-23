@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BUILDER_LIMITS, buildCopilotPrompt, cleanBuilderInput, cleanLine, cleanQuestion, collectNumbers, dataBlock, numbersIn, parseBuilderResponse, parseCopilotResponse,
+  buildSpec, BUILDER_LIMITS, buildCopilotPrompt, cleanBuilderInput, cleanLine, cleanQuestion, collectNumbers, dataBlock, numbersIn, parseBuilderResponse, parseCopilotResponse,
   parseSummaryResponse, safeJson, sanitizeHistory, unverifiedNumbers,
 } from "./ai";
 
@@ -79,7 +79,7 @@ test("builder drafts: variants over the platform limit, with markup or links are
 
 test("platform rules: Google headlines 30 and keywords kept, TikTok text only, keywords removed for Meta", () => {
   const kw = [{ term: "leather wallet", matchType: "phrase" }];
-  const g = parseBuilderResponse("google", draft([v("Handmade leather wallets", "Hand stitched in Krakow. Free returns.", ""), v("Leather gifts shop", "Gifts that last for years.", "")], { keywords: kw, negativeKeywords: ["cheap"] }))!;
+  const g = parseBuilderResponse("google", draft([v("Handmade leather wallets", "Hand stitched in Krakow. Free returns.", ""), v("Leather gifts shop", "Gifts that last for years.", "")], { keywords: kw, negativeKeywords: ["cheap"] }), "search")!;
   assert.equal(g.keywords.length, 1); assert.deepEqual(g.negativeKeywords, ["cheap"]);
   assert.equal(parseBuilderResponse("google", draft([v("This headline is far too long for Google", "ok text", ""), v("Fine", "ok text", "")])), null);
   const t = parseBuilderResponse("tiktok", draft([v("", "Wallets stitched by hand.", ""), v("", "Gifts that last.", "")], { keywords: kw }))!;
@@ -87,6 +87,43 @@ test("platform rules: Google headlines 30 and keywords kept, TikTok text only, k
   assert.equal(parseBuilderResponse("tiktok", draft([v("Has headline", "text", ""), v("", "text two", "")])), null, "TikTok variants must not carry a headline: one is dropped, one left");
   const m = parseBuilderResponse("meta", draft([v("Handmade wallets", "Stitched by hand.", ""), v("Leather gifts", "Gifts that last.", "")], { keywords: kw, negativeKeywords: ["x"] }))!;
   assert.deepEqual([m.keywords, m.negativeKeywords], [[], []]);
+  const pm = parseBuilderResponse("google", draft([v("Handmade leather wallets", "Hand stitched in Krakow.", ""), v("Leather gifts shop", "Gifts that last.", "")], { keywords: kw }), "pmax")!;
+  assert.deepEqual(pm.keywords, [], "Performance Max has no keyword list");
+});
+
+test("builder input is checked against the platform: goal, carousel size, optimisation default, search CPC", () => {
+  const base = { platform: "meta", goal: "sales", product: "Handmade leather wallets from Krakow", language: "English" };
+  const ok = cleanBuilderInput({ ...base, format: "single" });
+  assert.ok(ok.ok); if (!ok.ok) return;
+  assert.equal(ok.value.optimization, "add_to_cart"); assert.equal(ok.value.format, "single"); assert.equal(ok.value.ab, false);
+  assert.ok(!cleanBuilderInput({ ...base, platform: "tiktok", goal: "awareness" }).ok, "TikTok has no reach goal here");
+  assert.ok(!cleanBuilderInput({ ...base, format: "carousel", items: ["one wallet"] }).ok);
+  assert.ok(!cleanBuilderInput({ ...base, format: "carousel", items: Array.from({ length: 11 }, (_, i) => `wallet ${i}`) }).ok);
+  const car = cleanBuilderInput({ platform: "meta", goal: "traffic", format: "carousel", items: ["Black wallet", "Brown wallet", "Card holder"], ab: "on" });
+  assert.ok(car.ok && car.value.items.length === 3 && car.value.ab && car.value.product.includes("Black wallet"));
+  const s = cleanBuilderInput({ platform: "google", goal: "sales", format: "search", product: "Handmade leather wallets", maxCpc: "1,5" });
+  assert.ok(s.ok && s.value.maxCpc === 1.5);
+  const notSearch = cleanBuilderInput({ platform: "google", goal: "sales", format: "pmax", product: "Handmade leather wallets", maxCpc: "2" });
+  assert.ok(notSearch.ok && notSearch.value.maxCpc === null);
+  assert.ok(!cleanBuilderInput({ platform: "google", goal: "sales", format: "search", product: "Handmade leather wallets", maxCpc: "0" }).ok);
+});
+
+test("the spec comes from rules: budget warnings, launch checklist, pixel note", () => {
+  const input = cleanBuilderInput({ platform: "meta", goal: "sales", format: "single", product: "Handmade leather wallets", budgetPerDay: "1" });
+  assert.ok(input.ok); if (!input.ok) return;
+  const spec = buildSpec(input.value, "PLN");
+  assert.ok(spec.warnings.some((w) => /too small/.test(w)) && spec.warnings.some((w) => /Pixel/.test(w)));
+  assert.ok(spec.checklist.some((c) => /Pixel/.test(c))); assert.ok(spec.budget!.floor! > 1);
+  const none = buildSpec({ ...input.value, budgetPerDay: null }, "XYZ");
+  assert.ok(none.warnings.some((w) => /cannot size/.test(w)));
+});
+
+test("hashtags are cleaned and capped, and a TikTok hook is kept only for TikTok", () => {
+  const raw = draft([v("Handmade wallets", "Stitched by hand.", ""), v("Leather gifts", "Gifts that last.", "")], { hashtags: ["leather", "#wallet gift", "<b>x</b>", "#a"], hook: "A hand stitching a wallet" });
+  const m = parseBuilderResponse("meta", raw)!;
+  assert.deepEqual(m.hashtags, ["#leather", "#walletgift"]); assert.equal(m.hook, "");
+  const t = parseBuilderResponse("tiktok", draft([v("", "Wallets by hand.", ""), v("", "Gifts that last.", "")], { hashtags: ["wallets"], hook: "A hand stitching a wallet" }), "video")!;
+  assert.equal(t.hook, "A hand stitching a wallet");
 });
 
 test("builder answers with the wrong shape are rejected", () => {
