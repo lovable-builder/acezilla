@@ -19,7 +19,7 @@ const readVideo = (url: string) => new Promise<{ w: number; h: number; seconds: 
  * Adds images (up to ten) or one video to a campaign draft. Files go straight to this workspace's private folder, and are only
  * ever used for the draft: they are not sent to any ad platform. The checks here are advice about the platform's shapes and lengths.
  */
-export function CreativeUpload({ workspaceId, assets, onChange }: { workspaceId: string; assets: UploadedAsset[]; onChange: (a: UploadedAsset[]) => void }) {
+export function CreativeUpload({ workspaceId, assets, onChange, imagesOnly = false }: { workspaceId: string; assets: UploadedAsset[]; onChange: (a: UploadedAsset[]) => void; /** A carousel uses images only: each uploaded image becomes a card. */ imagesOnly?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -32,7 +32,8 @@ export function CreativeUpload({ workspaceId, assets, onChange }: { workspaceId:
     try {
       for (const file of Array.from(files)) {
         const isVideo = CREATIVE_LIMITS.videoTypes.includes(file.type), isImage = CREATIVE_LIMITS.imageTypes.includes(file.type);
-        if (!isVideo && !isImage) throw new Error(`${file.name}: use JPG, PNG or WebP images, or an MP4 or MOV video.`);
+        if (!isVideo && !isImage) throw new Error(`${file.name}: use JPG, PNG or WebP images${imagesOnly ? "" : ", or an MP4 or MOV video"}.`);
+        if (isVideo && imagesOnly) throw new Error("A carousel uses images. Choose a single creative for a video."); 
         if (isImage && file.size > CREATIVE_LIMITS.imageBytes) throw new Error(`${file.name} is ${mb(file.size)}. Images can be up to ${mb(CREATIVE_LIMITS.imageBytes)}.`);
         if (isVideo && file.size > CREATIVE_LIMITS.videoBytes) throw new Error(`${file.name} is ${mb(file.size)}. A video can be up to ${mb(CREATIVE_LIMITS.videoBytes)}.`);
         if (isVideo && next.length > 0) throw new Error("Use one video or up to ten images, not both. Remove the others first.");
@@ -61,10 +62,10 @@ export function CreativeUpload({ workspaceId, assets, onChange }: { workspaceId:
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <input type="hidden" name="assets" value={JSON.stringify(assets.map(({ preview: _p, ...a }) => a))} />
       <label className="bw-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void add(e.dataTransfer.files); }}>
-        <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple onChange={(e) => void add(e.target.files)} />
+        <input ref={input} type="file" accept={imagesOnly ? "image/jpeg,image/png,image/webp" : "image/jpeg,image/png,image/webp,video/mp4,video/quicktime"} multiple onChange={(e) => void add(e.target.files)} />
         <span className="ic" aria-hidden>{busy ? "…" : "＋"}</span>
-        <b style={{ fontWeight: 600 }}>{busy ? "Uploading…" : "Add images or a video"}</b>
-        <span className="sub" style={{ margin: 0, fontSize: 12 }}>Drop files here or click. Up to 10 images (JPG, PNG, WebP, 8 MB each) or one video (MP4 or MOV, 50 MB).</span>
+        <b style={{ fontWeight: 600 }}>{busy ? "Uploading…" : imagesOnly ? "Upload images as cards" : "Add images or a video"}</b>
+        <span className="sub" style={{ margin: 0, fontSize: 12 }}>{imagesOnly ? "Drop images here or click. Each one becomes a card. Up to 10 (JPG, PNG, WebP, 8 MB each)." : "Drop files here or click. Up to 10 images (JPG, PNG, WebP, 8 MB each) or one video (MP4 or MOV, 50 MB)."}</span>
       </label>
       {error && <div role="alert" style={{ color: "var(--neg)", fontSize: 13 }}>{error}</div>}
       {assets.length > 0 && (

@@ -148,6 +148,8 @@ export const BUILDER_LIMITS: Record<BuilderPlatform, { headline: number; text: n
   meta: { headline: 40, text: 125, description: 30 }, google: { headline: 30, text: 90, description: 0 }, tiktok: { headline: 0, text: 100, description: 0 },
 };
 export const CAROUSEL_ITEMS = { min: 2, max: 10 };
+/** One card of a carousel. Either a listing photo (an https address) or an uploaded file (a path in the workspace folder). */
+export interface BuilderCard { label: string; url?: string; path?: string }
 export interface BuilderInput {
   platform: BuilderPlatform; goal: (typeof BUILDER_GOALS)[number]; product: string; offer: string; audience: string; budgetPerDay: number | null; language: string; tone: string;
   /** Ad format (single, carousel, video, pmax, search). */ format: string;
@@ -157,6 +159,7 @@ export interface BuilderInput {
   /** Google Search: the most you will pay for a click. */ maxCpc: number | null;
   /** Files the person uploaded for this campaign (paths in their workspace folder). */ assets: CreativeAsset[];
   /** Product photos (https addresses) to show in the previews. */ productImages: string[];
+  /** Carousel cards in order: each is one picture (a listing photo address or an uploaded file) with a label. */ cards: BuilderCard[];
 }
 
 /** Parses the uploaded-file list from the form. Anything that is not exactly what the uploader writes is dropped. */
@@ -175,6 +178,20 @@ function cleanAssets(raw: unknown): CreativeAsset[] {
   // One video, or up to ten images: never a mix.
   const video = out.find((x) => x.kind === "video");
   return video ? [video] : out.filter((x) => x.kind === "image");
+}
+function cleanCards(raw: unknown): BuilderCard[] {
+  let list: unknown = raw;
+  if (typeof raw === "string") { try { list = JSON.parse(raw); } catch { return []; } }
+  if (!Array.isArray(list)) return [];
+  const out: BuilderCard[] = [];
+  for (const c of list.slice(0, CREATIVE_LIMITS.maxImages)) {
+    if (!isObj(c)) continue;
+    const url = typeof c.url === "string" && c.url.length <= 500 && /^https:\/\/[^\s"'<>]+$/.test(c.url) ? c.url : undefined;
+    const path = typeof c.path === "string" && CREATIVE_PATH.test(c.path) && kindOfPath(c.path) === "image" ? c.path : undefined;
+    if (!url && !path) continue;
+    out.push({ label: cleanLine(c.label, 120) || "Card", ...(url ? { url } : { path }) });
+  }
+  return out;
 }
 const cleanImageUrls = (raw: unknown): string[] => {
   let list: unknown = raw;
@@ -195,9 +212,15 @@ export function cleanBuilderInput(raw: Record<string, unknown>): { ok: true; val
   const optRaw = String(raw.optimization ?? "");
   const optimization = opts ? (opts.find((o) => o.id === optRaw) ?? opts.find((o) => o.recommended) ?? opts[0]!).id : "";
   const itemsIn = Array.isArray(raw.items) ? raw.items : typeof raw.items === "string" && raw.items ? [raw.items] : [];
-  const items = itemsIn.map((x) => cleanLine(x, 120)).filter(Boolean);
-  if (format.items && (items.length < format.items.min || items.length > format.items.max)) return { ok: false, error: `A carousel needs ${format.items.min} to ${format.items.max} products. You chose ${items.length}.` };
-  const product = cleanLine(raw.product, 600) || (format.items ? items.join(", ").slice(0, 600) : "");
+  const cards = cleanCards(raw.cards);
+  // For a carousel the cards are the truth: their labels are the products the ad talks about.
+  const itemList = (cards.length ? cards.map((c) => c.label) : itemsIn.map((x) => cleanLine(x, 120))).filter(Boolean);
+  // Several cards can show the same product (different photos): the ad talks about each product once.
+  const items = itemList;
+  const products = [...new Set(itemList)];
+  if (format.items && (items.length < format.items.min || items.length > format.items.max)) return { ok: false, error: `A carousel needs ${format.items.min} to ${format.items.max} cards. You have ${items.length}.` };
+  const typed = cleanLine(raw.product, 600);
+  const product = format.items && typed.length < 10 ? products.join(", ").slice(0, 600) : typed;
   if (product.length < 10) return { ok: false, error: "Describe what you are advertising in at least a sentence" };
   const budgetRaw = String(raw.budgetPerDay ?? "").trim().replace(",", ".");
   const budget = budgetRaw === "" ? null : Number(budgetRaw);
@@ -206,7 +229,7 @@ export function cleanBuilderInput(raw: Record<string, unknown>): { ok: true; val
   const maxCpc = cpcRaw === "" ? null : Number(cpcRaw);
   if (maxCpc !== null && (!Number.isFinite(maxCpc) || maxCpc <= 0 || maxCpc > 10_000)) return { ok: false, error: "Enter a maximum price per click above 0" };
   const language = cleanLine(raw.language, 30) || "English";
-  return { ok: true, value: { platform, goal, product, offer: cleanLine(raw.offer, 300), audience: cleanLine(raw.audience, 300), budgetPerDay: budget, language, tone: cleanLine(raw.tone, 60), format: format.id, optimization, ab: raw.ab === "on" || raw.ab === true || raw.ab === "true", items: format.items ? items : [], maxCpc: platform === "google" && format.id === "search" ? maxCpc : null, assets: cleanAssets(raw.assets), productImages: cleanImageUrls(raw.productImages) } };
+  return { ok: true, value: { platform, goal, product, offer: cleanLine(raw.offer, 300), audience: cleanLine(raw.audience, 300), budgetPerDay: budget, language, tone: cleanLine(raw.tone, 60), format: format.id, optimization, ab: raw.ab === "on" || raw.ab === true || raw.ab === "true", items: format.items ? products : [], maxCpc: platform === "google" && format.id === "search" ? maxCpc : null, assets: cleanAssets(raw.assets), productImages: cleanImageUrls(raw.productImages), cards: format.items ? cards : [] } };
 }
 
 const FORMAT_RULES: Record<string, string> = {
@@ -280,7 +303,7 @@ export function buildSpec(input: BuilderInput, currency: string): BuilderSpec {
   if (input.platform === "tiktok" && input.optimization === "view_content") warnings.push("Optimising for view content is the weakest signal. Move to add to cart or payment once your pixel records them.");
   return {
     format: input.format, goal: input.goal, optimization: input.optimization, ab: input.ab, maxCpc: input.maxCpc,
-    checklist: launchChecklist(input.platform, input.format, input.goal), warnings, creative: creativeChecks(input.platform, input.format, input.assets, { cards: input.items.length || undefined }),
+    checklist: launchChecklist(input.platform, input.format, input.goal), warnings, creative: creativeChecks(input.platform, input.format, input.assets, { cards: input.items.length || undefined, cardImages: input.cards.length || undefined }),
     budget: { entered: input.budgetPerDay, floor: guide?.floor ?? null, recommended: guide?.recommended ?? null, currency },
   };
 }

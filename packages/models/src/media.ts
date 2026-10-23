@@ -73,6 +73,7 @@ export const MEDIA_SPECS: Record<MediaPlatform, PlatformSpec> = {
 
 export const MEDIA_PLATFORMS = Object.keys(MEDIA_SPECS) as MediaPlatform[];
 export const SEARCH_MAX_KEYWORDS = 20;
+const CAROUSEL_MIN = 2;
 
 /**
  * Smallest daily budget worth setting, in US dollars, per platform and goal. Platforms enforce their own minimums and change
@@ -193,7 +194,7 @@ export interface CreativeCheck { ok: boolean; text: string }
  * Whether the files added so far suit the chosen platform and format. A failed check is advice, not a block: the draft can still be
  * written, and the person fixes the file before launch.
  */
-export function creativeChecks(platform: MediaPlatform, format: string, assets: CreativeAsset[], o: { cards?: number } = {}): CreativeCheck[] {
+export function creativeChecks(platform: MediaPlatform, format: string, assets: CreativeAsset[], o: { cards?: number; /** Carousel cards that already have a picture (listing photos and uploads together). */ cardImages?: number } = {}): CreativeCheck[] {
   const images = assets.filter((a) => a.kind === "image"), videos = assets.filter((a) => a.kind === "video");
   const out: CreativeCheck[] = [];
   if (platform === "tiktok") {
@@ -204,12 +205,11 @@ export function creativeChecks(platform: MediaPlatform, format: string, assets: 
     return out;
   }
   if (platform === "meta") {
-    if (assets.length === 0) return [{ ok: false, text: format === "carousel" ? "Add an image for each product in the carousel." : "Add an image or a short video." }];
     if (format === "carousel") {
       if (videos.length) out.push({ ok: false, text: "A carousel uses images. Remove the video or switch to a single creative." });
-      const need = o.cards ?? 2;
-      out.push(images.length >= need ? { ok: true, text: `${images.length} images for ${need} product cards.` } : { ok: false, text: `${images.length} of ${need} images added: one for each product card.` });
-    }
+      const need = Math.max(o.cards ?? 0, CAROUSEL_MIN), have = o.cardImages ?? images.length;
+      out.push(have >= need ? { ok: true, text: `${have} cards, each with a picture.` } : { ok: false, text: `${have} of ${need} cards have a picture. A carousel needs at least ${CAROUSEL_MIN}.` });
+    } else if (assets.length === 0) return [{ ok: false, text: "Add an image or a short video." }];
     for (const a of assets) { const r = ratioName(a.w, a.h); if (!["1:1", "4:5", "9:16"].includes(r)) out.push({ ok: false, text: `${a.name} is ${r}. Meta works best with 1:1, 4:5 or 9:16.` }); }
     if (out.every((c) => c.ok) || out.length === 0) out.push({ ok: true, text: "Files are in a ratio Meta shows well." });
     return out;

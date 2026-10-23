@@ -140,3 +140,17 @@ test("the fit note says whether a file fills a placement or gets cropped", () =>
   const sq = fitNote(1, reels)!; assert.equal(sq.fits, false); assert.match(sq.text, /9:16/); assert.match(sq.text, /empty space/);
   assert.equal(fitNote(null, reels), null); assert.equal(fitNote(1, PLACEMENTS.find((p) => p.id === "search")!), null);
 });
+
+test("carousel cards: listing photos and uploads together make the cards, in order; a carousel needs two", () => {
+  const base = { platform: "meta", goal: "traffic", format: "carousel", ab: "off" };
+  const ok = cleanBuilderInput({ ...base, cards: JSON.stringify([{ label: "Lamp", url: "https://a.allegroimg.com/original/1" }, { label: "Lamp side", url: "https://a.allegroimg.com/original/2" }, { label: "photo.jpg", path: `${WS}/a1.jpg` }, { label: "bad", url: "http://x.pl/a.jpg" }, { label: "bad2", path: "../x.jpg" }]) });
+  assert.ok(ok.ok); if (!ok.ok) return;
+  assert.deepEqual(ok.value.cards.map((c) => c.label), ["Lamp", "Lamp side", "photo.jpg"]);
+  assert.deepEqual(ok.value.items, ["Lamp", "Lamp side", "photo.jpg"]);
+  assert.equal(ok.value.cards[2]!.path, `${WS}/a1.jpg`); assert.equal(ok.value.cards[0]!.url, "https://a.allegroimg.com/original/1");
+  const one = cleanBuilderInput({ ...base, cards: JSON.stringify([{ label: "Lamp", url: "https://a.allegroimg.com/original/1" }]) });
+  assert.ok(!one.ok && /2 to 10 cards/.test(one.error));
+  assert.deepEqual((cleanBuilderInput({ platform: "meta", goal: "traffic", format: "single", product: "Handmade leather wallets", cards: JSON.stringify([{ label: "x", url: "https://a.b/c.jpg" }]) }) as { value: { cards: unknown[] } }).value.cards, []);
+  assert.ok(creativeChecks("meta", "carousel", [], { cards: 3, cardImages: 3 }).every((c) => c.ok));
+  assert.ok(creativeChecks("meta", "carousel", [], { cards: 3, cardImages: 1 }).some((c) => !c.ok && /1 of 3/.test(c.text)));
+});

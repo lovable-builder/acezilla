@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { budgetGuide, creativeChecks, MEDIA_PLATFORMS, MEDIA_SPECS, type MediaPlatform } from "@acezilla/models";
 import { createDraft } from "@/app/(app)/builder/actions";
@@ -7,6 +7,7 @@ import { BrandLogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Thumb, thumbUrl } from "@/components/app/thumb";
 import { PreviewSwitcher } from "./preview-switcher";
+import { CarouselCards, type Card } from "./carousel-cards";
 import { CreativeUpload, type UploadedAsset } from "./creative-upload";
 
 const STEPS = ["Platform", "Goal & format", "Product & message", "Budget", "Review"];
@@ -34,8 +35,8 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
   const [format, setFormat] = useState(spec.formats[0]!.id);
   const [optimization, setOptimization] = useState("add_to_cart");
   const [product, setProduct] = useState("");
-  const [items, setItems] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
+  const [cards, setCards] = useState<Card[]>([]);
+  const items = cards.map((c) => c.label);
   const [offer, setOffer] = useState("");
   const [budget, setBudget] = useState("");
   const [ab, setAb] = useState(false);
@@ -54,23 +55,31 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
 
   const choosePlatform = (p: MediaPlatform) => {
     const s = MEDIA_SPECS[p];
-    setPlatform(p); setGoal("sales"); setFormat(s.formats[0]!.id); setOptimization(s.optimizations?.sales?.find((o) => o.recommended)?.id ?? s.optimizations?.sales?.[0]?.id ?? ""); setItems([]);
+    setPlatform(p); setGoal("sales"); setFormat(s.formats[0]!.id); setOptimization(s.optimizations?.sales?.find((o) => o.recommended)?.id ?? s.optimizations?.sales?.[0]?.id ?? ""); setCards([]);
   };
   const chooseGoal = (g: string) => { setGoal(g); const o = spec.optimizations?.[g]; setOptimization(o?.find((x) => x.recommended)?.id ?? o?.[0]?.id ?? ""); };
 
-  const shown = useMemo(() => catalog.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())).slice(0, 60), [catalog, query]);
-  const toggle = (name: string) => setItems((cur) => cur.includes(name) ? cur.filter((x) => x !== name) : fmt.items && cur.length >= fmt.items.max ? cur : [...cur, name]);
 
   const stepReady = [true, true,
     fmt.items ? items.length >= fmt.items.min : product.trim().length >= 10,
     true, true][step]!;
-  const hint = step === 2 ? (fmt.items ? `Pick ${fmt.items.min} to ${fmt.items.max} products.` : "Describe what you are advertising in at least a sentence.") : "";
-  const primary = fmt.items ? items.join(", ") : product;
+  const hint = step === 2 ? (fmt.items ? `Add at least ${fmt.items.min} cards (up to ${fmt.items.max}).` : "Describe what you are advertising in at least a sentence.") : "";
+  const primary = fmt.items ? [...new Set(items)].join(", ") : product;
   // Product photos: for a carousel, the photos of the chosen products; otherwise the product started from.
   const galleryOf = (name: string) => { const c = catalog.find((x) => x.name === name); return c?.images?.length ? c.images : c?.imageUrl ? [c.imageUrl] : []; };
   const photoOf = (name: string) => chosenPhoto[name] ?? galleryOf(name)[0] ?? null;
-  const productsWithPhotos = fmt.items ? items : pickedName ? [pickedName] : [];
+  const productsWithPhotos = fmt.items ? [] : pickedName ? [pickedName] : [];
   const productPhotos = productsWithPhotos.map(photoOf).filter((u): u is string => !!u).slice(0, 10);
+  // In a carousel every uploaded image becomes a card, and removing the upload removes its card.
+  useEffect(() => {
+    if (!fmt.items) return;
+    setCards((cur) => {
+      const kept = cur.filter((c) => !c.path || assets.some((a) => a.path === c.path));
+      const have = new Set(kept.map((c) => c.path).filter(Boolean));
+      const added = assets.filter((a) => a.kind === "image" && !have.has(a.path)).map((a) => ({ id: a.path, label: a.name, src: a.preview, path: a.path }));
+      return kept.length === cur.length && added.length === 0 ? cur : [...kept, ...added].slice(0, fmt.items!.max);
+    });
+  }, [assets, fmt.items]);
   const first = assets[0];
   // The real shape of the chosen listing photo, read in the browser, so the preview can say whether a placement fits it.
   const [photoRatio, setPhotoRatio] = useState<{ url: string; ratio: number } | null>(null);
@@ -83,8 +92,8 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
     i.src = shownPhoto;
   }, [shownPhoto]);
   const mediaRatio = first ? first.w / first.h : shownPhoto && photoRatio?.url === shownPhoto ? photoRatio.ratio : null;
-  const checks = creativeChecks(platform, format, assets, { cards: fmt.items ? items.length || fmt.items.min : undefined });
-  const media = assets.length ? (assets[0]!.kind === "video" ? { images: [], video: assets[0]!.preview } : { images: assets.map((a) => a.preview) }) : usePhotos && productPhotos.length ? { images: productPhotos } : undefined;
+  const checks = creativeChecks(platform, format, assets, { cards: fmt.items ? cards.length || fmt.items.min : undefined, cardImages: fmt.items ? cards.length : undefined });
+  const media = fmt.items ? (cards.length ? { images: cards.map((c) => c.src) } : undefined) : assets.length ? (assets[0]!.kind === "video" ? { images: [], video: assets[0]!.preview } : { images: assets.map((a) => a.preview) }) : usePhotos && productPhotos.length ? { images: productPhotos } : undefined;
 
   return (
     <form action={createDraft} className="bw">
@@ -126,7 +135,7 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
           <div><div className="eyebrow" style={{ marginBottom: 8 }}>Format</div>
             <div className="bw-grid">
               {spec.formats.map((f) => (
-                <Pick key={f.id} name="format" value={f.id} checked={format === f.id} onChange={() => { setFormat(f.id); setItems([]); }}>
+                <Pick key={f.id} name="format" value={f.id} checked={format === f.id} onChange={() => { setFormat(f.id); setCards([]); }}>
                   <b style={{ fontWeight: 600 }}>{f.label}{f.recommended ? " · recommended" : ""}</b><span className="sub" style={{ margin: 0, fontSize: 12 }}>{f.hint}</span>
                 </Pick>
               ))}
@@ -146,26 +155,12 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
         </section>
 
         <section className="bw-panel" hidden={step !== 2}>
-          <div><h2 className="h2" style={{ margin: 0 }}>{fmt.items ? "Which products?" : "What are you advertising?"}</h2></div>
+          <div><h2 className="h2" style={{ margin: 0 }}>{fmt.items ? "Build your carousel" : "What are you advertising?"}</h2>{fmt.items && <p className="sub" style={{ margin: "4px 0 0" }}>Each card is one picture. Use several photos of one product, photos of different products, or your own images.</p>}</div>
           {fmt.items ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {items.map((n) => <input key={n} type="hidden" name="items" value={n} />)}
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <input className="field" placeholder="Search your products" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 200 }} aria-label="Search products" />
-                <span className="mono tabnum" style={{ fontSize: 12, color: items.length >= fmt.items.min ? "var(--pos)" : "var(--ink3)" }}>{items.length} of {fmt.items.max} chosen</span>
-              </div>
-              {catalog.length === 0 && <p className="sub" style={{ margin: 0 }}>Connect a store to pick products from it, or type them below.</p>}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
-                {shown.map((c) => (
-                  <label key={`${c.store}|${c.id}`} className="bw-pick" style={{ flexDirection: "row", alignItems: "center", padding: "8px 12px", gap: 10 }}>
-                    <input type="checkbox" checked={items.includes(c.name)} onChange={() => toggle(c.name)} />
-                    <Thumb src={c.imageUrl} name={c.name} size={36} />
-                    <span style={{ flex: 1, overflowWrap: "anywhere" }}>{c.name}</span><span className="eyebrow">{c.store}</span>
-                  </label>
-                ))}
-              </div>
-              <label className="bw-label"><span className="eyebrow">Or add one by name</span>
-                <input className="field" placeholder="Product name, then press Enter" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const v = (e.target as HTMLInputElement).value.trim(); if (v) { toggle(v); (e.target as HTMLInputElement).value = ""; } } }} /></label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <CarouselCards cards={cards} onChange={setCards} catalog={catalog} min={fmt.items.min} max={fmt.items.max} />
+              <label className="bw-label"><span className="eyebrow">What should the ad say? (optional)</span>
+                <textarea name="product" className="field" rows={2} maxLength={600} value={product} onChange={(e) => setProduct(e.target.value)} placeholder="The new autumn range of LED lamps, free delivery over 200 PLN" /></label>
             </div>
           ) : (
             <label className="bw-label"><span className="eyebrow">Describe it</span>
@@ -179,7 +174,7 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
             </label>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div><div className="eyebrow">Pictures and video</div><p className="sub" style={{ margin: "2px 0 0", fontSize: 13 }}>Used for the preview and checked against {spec.short}&apos;s shapes. They are not sent anywhere.</p></div>
+            <div><div className="eyebrow">{fmt.items ? "Your own images" : "Pictures and video"}</div><p className="sub" style={{ margin: "2px 0 0", fontSize: 13 }}>Used for the preview and checked against {spec.short}&apos;s shapes. They are not sent anywhere.</p></div>
             {productsWithPhotos.some((n) => galleryOf(n).length > 0) && (
               <label className="bw-switch">
                 <input type="checkbox" checked={usePhotos} onChange={(e) => setUsePhotos(e.target.checked)} /><span className="track" />
@@ -205,7 +200,7 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
               );
             })}
             {usePhotos && productPhotos.length > 0 && <input type="hidden" name="productImages" value={JSON.stringify(productPhotos)} />}
-            <CreativeUpload workspaceId={workspaceId} assets={assets} onChange={setAssets} />
+            <CreativeUpload workspaceId={workspaceId} assets={assets} onChange={setAssets} imagesOnly={!!fmt.items} />
             {(assets.length > 0 || platform === "tiktok" || format === "pmax") && (
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
                 {checks.map((c) => <li key={c.text} style={{ color: c.ok ? "var(--pos)" : "var(--warn)" }}>{c.ok ? "✓" : "!"} {c.text}</li>)}

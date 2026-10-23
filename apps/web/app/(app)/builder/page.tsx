@@ -37,7 +37,9 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
   const assetList = (brief?.assets ?? []) as { path: string; kind: "image" | "video"; w: number; h: number }[];
   const signed = assetList.length ? (await supabase.storage.from("creatives").createSignedUrls(assetList.map((a) => a.path), 3600)).data ?? [] : [];
   const signedUrls = signed.map((x) => x.signedUrl).filter(Boolean) as string[];
-  const media = assetList[0]?.kind === "video" ? { images: [], video: signedUrls[0] } : signedUrls.length ? { images: signedUrls } : brief?.productImages?.length ? { images: brief.productImages } : undefined;
+  const signedByPath = new Map(assetList.map((a, i) => [a.path, signedUrls[i]] as const));
+  const cardImages = ((brief?.cards ?? []) as { url?: string; path?: string }[]).map((c) => c.url ?? (c.path ? signedByPath.get(c.path) : undefined)).filter((u): u is string => !!u);
+  const media = cardImages.length ? { images: cardImages } : assetList[0]?.kind === "video" ? { images: [], video: signedUrls[0] } : signedUrls.length ? { images: signedUrls } : brief?.productImages?.length ? { images: brief.productImages } : undefined;
 
   return (
     <>

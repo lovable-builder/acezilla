@@ -18,7 +18,7 @@ export async function createDraft(formData: FormData) {
     const parsed = cleanBuilderInput({ ...Object.fromEntries(formData.entries()), items: formData.getAll("items").map(String) });
     if (!parsed.ok) return back(`error=${encodeURIComponent(parsed.error)}`);
     // Uploaded files must live in this workspace's own folder. Anything else is dropped.
-    const input = { ...parsed.value, assets: parsed.value.assets.filter((x) => x.path.startsWith(`${workspace.id}/`)) };
+    const input = { ...parsed.value, assets: parsed.value.assets.filter((x) => x.path.startsWith(`${workspace.id}/`)), cards: parsed.value.cards.filter((c) => !c.path || c.path.startsWith(`${workspace.id}/`)) };
     if (!(await takeAiQuota(workspace.id, "builder"))) return back(`error=${encodeURIComponent(`You have used today's ${AI_LIMITS.builder} drafts for this workspace. It resets tomorrow.`)}`);
     const output = await getLlm().generateJson({
       system: builderSystem(input.platform, input.format), user: buildBuilderPrompt(input), schema: BUILDER_SCHEMA as unknown as JsonSchema,
