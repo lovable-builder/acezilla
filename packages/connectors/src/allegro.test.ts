@@ -110,17 +110,17 @@ test("sign convention follows the real entries, and the summary lists every type
 test("loads billing entries and offers with their counters", async () => {
   const f = (async (u: string) => u.includes("billing-entries")
     ? json({ billingEntries: [{ id: 1, occurredAt: "2026-10-20T10:00:00Z", type: { id: "SUC", name: "Prowizja" }, offer: { id: "o1" }, value: { amount: "-12.30", currency: "PLN" } }, { id: 2, occurredAt: "2026-10-20T11:00:00Z", type: { name: "Abonament" }, value: { amount: "-3", currency: "PLN" } }] })
-    : json({ offers: [{ id: "o1", name: "Chair", sellingMode: { price: { amount: "99.00" } }, stats: { visitsCount: 120, watchersCount: 4 }, stock: { available: 7, unit: "UNIT" } }, { id: "o2", name: "Table", stats: {} }] })) as unknown as typeof fetch;
+    : json({ offers: [{ id: "o1", name: "Chair", sellingMode: { price: { amount: "99.00" } }, stats: { visitsCount: 120, watchersCount: 4 }, stock: { available: 7, unit: "UNIT" }, primaryImage: { url: "https://a.allegroimg.com/original/x" } }, { id: "o2", name: "Table", stats: {} }] })) as unknown as typeof fetch;
   const fees = await loadAllegroFees(ctx(f), 30, NOW);
   assert.deepEqual(fees.map((x) => [x.typeId, x.offerId, x.amount]), [["SUC", "o1", -12.3], ["", null, -3]]);
   const offers = await loadAllegroOffers(ctx(f));
-  assert.deepEqual(offers[0], { offerId: "o1", name: "Chair", price: 99, visits: 120, watchers: 4, stock: 7 });
-  assert.deepEqual(offers[1], { offerId: "o2", name: "Table", price: null, visits: null, watchers: null, stock: null });
+  assert.deepEqual(offers[0], { offerId: "o1", name: "Chair", price: 99, visits: 120, watchers: 4, stock: 7, imageUrl: "https://a.allegroimg.com/original/x" });
+  assert.deepEqual(offers[1], { offerId: "o2", name: "Table", price: null, visits: null, watchers: null, stock: null, imageUrl: null });
 });
 
 test("ad spend becomes daily spend per offer in the shared dataset; sales stay as orders", () => {
   const fees = [fee("1", "Kampania reklamowa", -5, "o1", "2026-10-20T08:00:00Z"), fee("2", "Kampania reklamowa", -7, "o1", "2026-10-20T20:00:00Z"), fee("3", "Kampania reklamowa", -2, "o1", "2026-10-21T01:00:00Z"), fee("4", "Kampania reklamowa", -1, null), fee("5", "Prowizja", -50, "o1")];
-  const ds = buildAllegroDataset({ sellerId: "9", sellerName: "shop", currency: "PLN", fees, offers: [{ offerId: "o1", name: "Chair", price: 1, visits: null, watchers: null, stock: null }], orders: [] });
+  const ds = buildAllegroDataset({ sellerId: "9", sellerName: "shop", currency: "PLN", fees, offers: [{ offerId: "o1", name: "Chair", price: 1, visits: null, watchers: null, stock: null, imageUrl: null }], orders: [] });
   assert.equal(ds.accounts[0]!.name, "Allegro (shop)"); assert.equal(ds.accounts[0]!.platform, "allegro");
   assert.deepEqual(ds.ads.map((a) => [a.externalId, a.name]), [["allegro-offer-o1", "Chair"], ["allegro-offer-account", "Account-level ad costs"]]);
   const day = (ad: string, d: string) => ds.insights.find((i) => i.adExternalId === ad && i.date === d)?.spend;

@@ -81,3 +81,46 @@ test("matching a campaign to a product is strict: clear names match, brand-only 
   assert.equal(matchProduct("kids", P), null);
   assert.equal(matchProduct("", P), null);
 });
+
+import { creativeChecks, CREATIVE_PATH, ratioName } from "./media";
+import { cleanBuilderInput } from "./ai";
+const WS = "11111111-2222-3333-4444-555555555555";
+const img = (name: string, w: number, h: number) => ({ path: `${WS}/${name}.jpg`, kind: "image" as const, name, w, h, seconds: null });
+const vid = (w: number, h: number, seconds: number) => ({ path: `${WS}/clip.mp4`, kind: "video" as const, name: "clip.mp4", w, h, seconds });
+
+test("ratios are named for the common ad shapes", () => {
+  assert.deepEqual([ratioName(1080, 1080), ratioName(1080, 1350), ratioName(1080, 1920), ratioName(1200, 628), ratioName(1920, 1080), ratioName(500, 300)], ["1:1", "4:5", "9:16", "1.91:1", "16:9", "500×300"]);
+});
+
+test("TikTok needs a vertical video of 9 to 30 seconds", () => {
+  assert.equal(creativeChecks("tiktok", "video", [])[0]!.ok, false);
+  assert.ok(creativeChecks("tiktok", "video", [vid(1080, 1920, 14)]).every((c) => c.ok));
+  const bad = creativeChecks("tiktok", "video", [vid(1920, 1080, 45)]);
+  assert.equal(bad.filter((c) => !c.ok).length, 2);
+});
+
+test("Meta checks the ratio, and a carousel needs one image per card and no video", () => {
+  assert.ok(creativeChecks("meta", "single", [img("a", 1080, 1080)]).every((c) => c.ok));
+  assert.ok(creativeChecks("meta", "single", [img("a", 1600, 900)]).some((c) => !c.ok && /16:9/.test(c.text)));
+  assert.ok(creativeChecks("meta", "carousel", [img("a", 1080, 1080), img("b", 1080, 1080)], { cards: 3 }).some((c) => !c.ok && /2 of 3/.test(c.text)));
+  assert.ok(creativeChecks("meta", "carousel", [vid(1080, 1080, 10)], { cards: 2 }).some((c) => !c.ok && /images/.test(c.text)));
+  assert.equal(creativeChecks("meta", "single", [])[0]!.ok, false);
+});
+
+test("Performance Max wants a square logo and a landscape image; Search needs no files", () => {
+  const both = creativeChecks("google", "pmax", [img("logo", 512, 512), img("wide", 1200, 628)]);
+  assert.ok(both.every((c) => c.ok));
+  assert.equal(creativeChecks("google", "pmax", [img("logo", 512, 512)]).filter((c) => !c.ok).length, 1);
+  assert.deepEqual(creativeChecks("google", "search", []), []);
+});
+
+test("uploaded file lists are cleaned: only the uploader's paths, one video or images, https product photos", () => {
+  const base = { platform: "meta", goal: "traffic", format: "single", product: "Handmade leather wallets from Krakow" };
+  const ok = cleanBuilderInput({ ...base, assets: JSON.stringify([{ path: `${WS}/a1.jpg`, name: "a.jpg", w: 1080, h: 1080 }, { path: "../../etc/passwd.jpg", name: "x", w: 10, h: 10 }, { path: `${WS}/a2.png`, name: "b.png", w: 0, h: 5 }]), productImages: JSON.stringify(["https://shop.pl/a.jpg", "http://shop.pl/b.jpg", "javascript:alert(1)"]) });
+  assert.ok(ok.ok); if (!ok.ok) return;
+  assert.deepEqual(ok.value.assets.map((a) => a.path), [`${WS}/a1.jpg`]); assert.deepEqual(ok.value.productImages, ["https://shop.pl/a.jpg"]);
+  const mixed = cleanBuilderInput({ ...base, assets: JSON.stringify([{ path: `${WS}/a1.jpg`, name: "a", w: 10, h: 10 }, { path: `${WS}/v.mp4`, name: "v", w: 1080, h: 1920, seconds: 12 }]) });
+  assert.ok(mixed.ok && mixed.value.assets.length === 1 && mixed.value.assets[0]!.kind === "video");
+  assert.ok(CREATIVE_PATH.test(`${WS}/abc_DEF-1.webp`)); assert.ok(!CREATIVE_PATH.test(`${WS}/a/b.jpg`));
+  assert.deepEqual(cleanBuilderInput({ ...base, assets: "not json" }).ok && (cleanBuilderInput({ ...base, assets: "not json" }) as { value: { assets: unknown[] } }).value.assets, []);
+});

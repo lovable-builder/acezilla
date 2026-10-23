@@ -176,3 +176,48 @@ export function todaysDecisions<T extends { name: string; status: string; spend:
     .sort((a, b) => b.campaign.spend - a.campaign.spend).slice(0, o.limit ?? 8);
 }
 export const roasTone = (roas: number | null): "good" | "ok" | "bad" | "none" => (roas === null ? "none" : roas >= ROAS_GOOD ? "good" : roas >= ROAS_LOSING ? "ok" : "bad");
+
+// ---------------- creative files (images and video) ----------------
+
+export interface CreativeAsset { path: string; kind: "image" | "video"; name: string; w: number; h: number; seconds: number | null }
+export const CREATIVE_LIMITS = { maxImages: 10, imageBytes: 8 * 1024 * 1024, videoBytes: 50 * 1024 * 1024, imageTypes: ["image/jpeg", "image/png", "image/webp"], videoTypes: ["video/mp4", "video/quicktime"] };
+/** Accepted file names inside a workspace folder, as written by the uploader. */
+export const CREATIVE_PATH = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp|mp4|mov)$/;
+export const kindOfPath = (p: string): "image" | "video" => (/\.(mp4|mov)$/.test(p) ? "video" : "image");
+
+const near = (v: number, target: number, tol: number) => Math.abs(v - target) <= tol;
+export const ratioName = (w: number, h: number) => { const r = w / h; return near(r, 1, 0.03) ? "1:1" : near(r, 0.8, 0.03) ? "4:5" : near(r, 0.5625, 0.03) ? "9:16" : near(r, 1.91, 0.08) ? "1.91:1" : near(r, 1.7778, 0.04) ? "16:9" : `${w}×${h}`; };
+
+export interface CreativeCheck { ok: boolean; text: string }
+/**
+ * Whether the files added so far suit the chosen platform and format. A failed check is advice, not a block: the draft can still be
+ * written, and the person fixes the file before launch.
+ */
+export function creativeChecks(platform: MediaPlatform, format: string, assets: CreativeAsset[], o: { cards?: number } = {}): CreativeCheck[] {
+  const images = assets.filter((a) => a.kind === "image"), videos = assets.filter((a) => a.kind === "video");
+  const out: CreativeCheck[] = [];
+  if (platform === "tiktok") {
+    const v = videos[0];
+    if (!v) return [{ ok: false, text: "Add a vertical video, 9:16, 9 to 30 seconds long." }];
+    out.push(near(v.w / v.h, 0.5625, 0.04) ? { ok: true, text: `The video is vertical (${ratioName(v.w, v.h)}).` } : { ok: false, text: `The video is ${ratioName(v.w, v.h)}. TikTok needs vertical 9:16.` });
+    if (v.seconds !== null) out.push(v.seconds >= 9 && v.seconds <= 30 ? { ok: true, text: `The video is ${Math.round(v.seconds)} seconds, inside 9 to 30.` } : { ok: false, text: `The video is ${Math.round(v.seconds)} seconds. TikTok ads should be 9 to 30.` });
+    return out;
+  }
+  if (platform === "meta") {
+    if (assets.length === 0) return [{ ok: false, text: format === "carousel" ? "Add an image for each product in the carousel." : "Add an image or a short video." }];
+    if (format === "carousel") {
+      if (videos.length) out.push({ ok: false, text: "A carousel uses images. Remove the video or switch to a single creative." });
+      const need = o.cards ?? 2;
+      out.push(images.length >= need ? { ok: true, text: `${images.length} images for ${need} product cards.` } : { ok: false, text: `${images.length} of ${need} images added: one for each product card.` });
+    }
+    for (const a of assets) { const r = ratioName(a.w, a.h); if (!["1:1", "4:5", "9:16"].includes(r)) out.push({ ok: false, text: `${a.name} is ${r}. Meta works best with 1:1, 4:5 or 9:16.` }); }
+    if (out.every((c) => c.ok) || out.length === 0) out.push({ ok: true, text: "Files are in a ratio Meta shows well." });
+    return out;
+  }
+  if (format === "pmax") {
+    if (images.length === 0) return [{ ok: false, text: "Add images, and include a square logo." }];
+    out.push(images.some((a) => near(a.w / a.h, 1, 0.03)) ? { ok: true, text: "There is a square (1:1) image for the logo." } : { ok: false, text: "Add a square (1:1) logo." });
+    out.push(images.some((a) => near(a.w / a.h, 1.91, 0.1)) ? { ok: true, text: "There is a landscape (1.91:1) image." } : { ok: false, text: "A landscape (1.91:1) image is also needed." });
+  }
+  return out;
+}

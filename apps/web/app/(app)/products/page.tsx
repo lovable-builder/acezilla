@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Thumb } from "@/components/app/thumb";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money } from "@/lib/format";
 import { parsePeriod, todayIso, windowStart } from "@/lib/period";
@@ -97,7 +98,7 @@ export default async function Products({ searchParams }: { searchParams: Promise
               <tbody>
                 {shown.map((r) => (
                   <tr key={`${r.channel}|${r.productId}`} style={{ opacity: r.units === 0 ? 0.7 : 1 }}>
-                    <td style={{ textAlign: "left", maxWidth: 340, overflowWrap: "anywhere" }}>{r.name}{!r.listed && <span className="seo-chip seo-chip-attention" style={{ marginLeft: 8 }} title="It sold in this period but is not among your active listings now. It may have ended or sold out.">{r.channel === "allegro" ? "Not active on Allegro" : "No longer listed"}</span>}</td>
+                    <td style={{ textAlign: "left", maxWidth: 380, overflowWrap: "anywhere" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><Thumb src={r.imageUrl} name={r.name} />{r.name}</span>{!r.listed && <span className="seo-chip seo-chip-attention" style={{ marginLeft: 8 }} title="It sold in this period but is not among your active listings now. It may have ended or sold out.">{r.channel === "allegro" ? "Not active on Allegro" : "No longer listed"}</span>}</td>
                     <td style={{ textAlign: "left" }}>{STORE[r.channel] ?? r.channel}</td>
                     <td style={{ textAlign: "left", color: "var(--ink3)" }}>{[r.status === "publish" ? "Published" : r.status === "active" ? "Active" : r.status, r.stock === "outofstock" ? "out of stock" : null].filter(Boolean).join(" · ") || "—"}</td>
                     <td style={{ textAlign: "left" }}>{(() => { const l = level(r); const c = ({ out: ["missing", "Out"], low: ["attention", "Low"], ok: ["good", "In stock"], unknown: null } as const)[l]; return c ? <span className={`seo-chip seo-chip-${c[0]}`} title={r.stockQty !== null ? `${r.stockQty} in stock` : undefined}>{c[1]}{r.stockQty !== null ? ` · ${r.stockQty}` : ""}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>; })()}</td>

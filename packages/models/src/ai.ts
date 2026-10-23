@@ -138,7 +138,7 @@ export function parseSummaryResponse(raw: unknown, dataNumbers: number[]): Weekl
 }
 
 // ---------------- campaign builder (suggest-only drafts) ----------------
-import { MEDIA_SPECS, SEARCH_MAX_KEYWORDS, budgetGuide, launchChecklist } from "./media";
+import { CREATIVE_LIMITS, CREATIVE_PATH, MEDIA_SPECS, SEARCH_MAX_KEYWORDS, budgetGuide, creativeChecks, kindOfPath, launchChecklist, type CreativeAsset, type CreativeCheck } from "./media";
 
 export type BuilderPlatform = "meta" | "google" | "tiktok";
 export const BUILDER_PLATFORMS: BuilderPlatform[] = ["meta", "google", "tiktok"];
@@ -155,7 +155,33 @@ export interface BuilderInput {
   /** Ask for an A/B pair that differs in one element. */ ab: boolean;
   /** Product names for a carousel. */ items: string[];
   /** Google Search: the most you will pay for a click. */ maxCpc: number | null;
+  /** Files the person uploaded for this campaign (paths in their workspace folder). */ assets: CreativeAsset[];
+  /** Product photos (https addresses) to show in the previews. */ productImages: string[];
 }
+
+/** Parses the uploaded-file list from the form. Anything that is not exactly what the uploader writes is dropped. */
+function cleanAssets(raw: unknown): CreativeAsset[] {
+  let list: unknown = raw;
+  if (typeof raw === "string") { try { list = JSON.parse(raw); } catch { return []; } }
+  if (!Array.isArray(list)) return [];
+  const out: CreativeAsset[] = [];
+  for (const a of list.slice(0, CREATIVE_LIMITS.maxImages)) {
+    if (!isObj(a) || typeof a.path !== "string" || !CREATIVE_PATH.test(a.path)) continue;
+    const n = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 && v <= max ? v : 0);
+    const w = n(a.w, 20000), h = n(a.h, 20000);
+    if (!w || !h) continue;
+    out.push({ path: a.path, kind: kindOfPath(a.path), name: cleanLine(a.name, 80) || "file", w: Math.round(w), h: Math.round(h), seconds: n(a.seconds, 600) || null });
+  }
+  // One video, or up to ten images: never a mix.
+  const video = out.find((x) => x.kind === "video");
+  return video ? [video] : out.filter((x) => x.kind === "image");
+}
+const cleanImageUrls = (raw: unknown): string[] => {
+  let list: unknown = raw;
+  if (typeof raw === "string") { try { list = JSON.parse(raw); } catch { return []; } }
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, CREATIVE_LIMITS.maxImages).filter((u): u is string => typeof u === "string" && u.length <= 500 && /^https:\/\/[^\s"'<>]+$/.test(u));
+};
 
 export function cleanBuilderInput(raw: Record<string, unknown>): { ok: true; value: BuilderInput } | { ok: false; error: string } {
   const platform = String(raw.platform ?? "") as BuilderPlatform;
@@ -180,7 +206,7 @@ export function cleanBuilderInput(raw: Record<string, unknown>): { ok: true; val
   const maxCpc = cpcRaw === "" ? null : Number(cpcRaw);
   if (maxCpc !== null && (!Number.isFinite(maxCpc) || maxCpc <= 0 || maxCpc > 10_000)) return { ok: false, error: "Enter a maximum price per click above 0" };
   const language = cleanLine(raw.language, 30) || "English";
-  return { ok: true, value: { platform, goal, product, offer: cleanLine(raw.offer, 300), audience: cleanLine(raw.audience, 300), budgetPerDay: budget, language, tone: cleanLine(raw.tone, 60), format: format.id, optimization, ab: raw.ab === "on" || raw.ab === true || raw.ab === "true", items: format.items ? items : [], maxCpc: platform === "google" && format.id === "search" ? maxCpc : null } };
+  return { ok: true, value: { platform, goal, product, offer: cleanLine(raw.offer, 300), audience: cleanLine(raw.audience, 300), budgetPerDay: budget, language, tone: cleanLine(raw.tone, 60), format: format.id, optimization, ab: raw.ab === "on" || raw.ab === true || raw.ab === "true", items: format.items ? items : [], maxCpc: platform === "google" && format.id === "search" ? maxCpc : null, assets: cleanAssets(raw.assets), productImages: cleanImageUrls(raw.productImages) } };
 }
 
 const FORMAT_RULES: Record<string, string> = {
@@ -233,6 +259,7 @@ export interface BuilderSpec {
   /** What must be ready before launch (from the platform rules, not from the model). */ checklist: string[];
   /** Things to fix or check, such as a budget below the sensible minimum. */ warnings: string[];
   budget: { entered: number | null; floor: number | null; recommended: number | null; currency: string } | null;
+  /** How the uploaded files match the platform: one line each, ticked or not. */ creative: CreativeCheck[];
 }
 export interface BuilderOutput {
   campaignName: string; objective: string; audiences: { name: string; description: string }[];
@@ -253,7 +280,7 @@ export function buildSpec(input: BuilderInput, currency: string): BuilderSpec {
   if (input.platform === "tiktok" && input.optimization === "view_content") warnings.push("Optimising for view content is the weakest signal. Move to add to cart or payment once your pixel records them.");
   return {
     format: input.format, goal: input.goal, optimization: input.optimization, ab: input.ab, maxCpc: input.maxCpc,
-    checklist: launchChecklist(input.platform, input.format, input.goal), warnings,
+    checklist: launchChecklist(input.platform, input.format, input.goal), warnings, creative: creativeChecks(input.platform, input.format, input.assets, { cards: input.items.length || undefined }),
     budget: { entered: input.budgetPerDay, floor: guide?.floor ?? null, recommended: guide?.recommended ?? null, currency },
   };
 }

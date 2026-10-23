@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import type { Dataset } from "./dataset";
+import { safeImageUrl } from "./image-url";
 
 /**
  * WooCommerce connects through the acezilla plugin installed on the store. The plugin pairs with a one-time code,
@@ -59,7 +60,7 @@ export function verifyWooSignature(o: { secret: string; timestamp: string | null
 // ---- what the plugin sends ----
 export interface WooInfo { currency: string | null; siteName: string | null; pluginVersion: string | null; wooVersion: string | null; wpVersion: string | null; attribution: boolean | null }
 /** A product in the store's catalogue. Variations are not sent; only the parent product. */
-export interface WooProduct { externalId: string; name: string; sku: string | null; price: number | null; status: string; stockStatus: string | null; /** Units in stock when the store manages stock, otherwise null. */ stockQty: number | null; productType: string | null; totalSales: number }
+export interface WooProduct { externalId: string; name: string; sku: string | null; price: number | null; status: string; stockStatus: string | null; /** Units in stock when the store manages stock, otherwise null. */ stockQty: number | null; productType: string | null; totalSales: number; imageUrl: string | null }
 /** One line of a counted order: which product, how many, and what the customer paid for it before tax. */
 export interface WooLine { lineKey: string; orderExternalId: string; productId: string; name: string | null; qty: number; unitPrice: number }
 export type WooPush =
@@ -87,7 +88,7 @@ export function mapPushedProduct(raw: unknown): { keep: WooProduct } | { remove:
   const name = str(p.name, 200);
   if (!name) return null;
   const price = typeof p.price === "number" || (typeof p.price === "string" && p.price.trim() !== "") ? num(p.price) : null;
-  return { keep: { externalId, name, sku: str(p.sku, 60), price: price !== null && price >= 0 && price < 1e9 ? round2(price) : null, status, stockStatus: str(p.stock_status, 20), stockQty: typeof p.stock_quantity === "number" && Number.isFinite(p.stock_quantity) ? Math.max(0, Math.min(1e9, Math.round(p.stock_quantity))) : null, productType: str(p.type, 20), totalSales: Math.max(0, Math.min(1e9, Math.round(num(p.total_sales)))) } };
+  return { keep: { externalId, name, sku: str(p.sku, 60), price: price !== null && price >= 0 && price < 1e9 ? round2(price) : null, status, stockStatus: str(p.stock_status, 20), stockQty: typeof p.stock_quantity === "number" && Number.isFinite(p.stock_quantity) ? Math.max(0, Math.min(1e9, Math.round(p.stock_quantity))) : null, productType: str(p.type, 20), imageUrl: safeImageUrl(p.image), totalSales: Math.max(0, Math.min(1e9, Math.round(num(p.total_sales)))) } };
 }
 
 /** The order lines the plugin sends with an order, cleaned. Bad lines are dropped, never trusted. */

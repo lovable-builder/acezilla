@@ -17,7 +17,8 @@ export async function createDraft(formData: FormData) {
     const { workspace, user } = await requireWriter();
     const parsed = cleanBuilderInput({ ...Object.fromEntries(formData.entries()), items: formData.getAll("items").map(String) });
     if (!parsed.ok) return back(`error=${encodeURIComponent(parsed.error)}`);
-    const input = parsed.value;
+    // Uploaded files must live in this workspace's own folder. Anything else is dropped.
+    const input = { ...parsed.value, assets: parsed.value.assets.filter((x) => x.path.startsWith(`${workspace.id}/`)) };
     if (!(await takeAiQuota(workspace.id, "builder"))) return back(`error=${encodeURIComponent(`You have used today's ${AI_LIMITS.builder} drafts for this workspace. It resets tomorrow.`)}`);
     const output = await getLlm().generateJson({
       system: builderSystem(input.platform, input.format), user: buildBuilderPrompt(input), schema: BUILDER_SCHEMA as unknown as JsonSchema,
@@ -52,7 +53,12 @@ export async function deleteDraft(formData: FormData) {
   try {
     const { workspace } = await requireWriter();
     if (!/^[0-9a-f-]{36}$/.test(id)) throw new Error("Unknown draft");
-    await createAdminClient().from("campaign_draft").delete().eq("id", id).eq("workspace_id", workspace.id);
+    const admin = createAdminClient();
+    // Remove the files uploaded for the draft too, so nothing is left behind.
+    const { data: d } = await admin.from("campaign_draft").select("brief").eq("id", id).eq("workspace_id", workspace.id).maybeSingle();
+    const paths = ((d?.brief as { assets?: { path: string }[] } | null)?.assets ?? []).map((x) => x.path).filter((p) => p.startsWith(`${workspace.id}/`));
+    if (paths.length) await admin.storage.from("creatives").remove(paths);
+    await admin.from("campaign_draft").delete().eq("id", id).eq("workspace_id", workspace.id);
   } catch (e) { return back(`error=${encodeURIComponent(e instanceof Error ? e.message : "Could not delete")}`); }
   revalidatePath("/builder");
   back("notice=Draft+deleted");

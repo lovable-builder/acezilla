@@ -28,11 +28,16 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
   if (!current) return <Card>No workspace found for this account.</Card>;
   const { data: drafts } = await supabase.from("campaign_draft").select("id,platform,title,status,created_at").eq("workspace_id", current.id).order("created_at", { ascending: false }).limit(12);
   const { rows: prod } = await loadProducts(supabase, current.id, windowStart(todayIso(), 90), todayIso());
-  const catalog = prod.filter((r) => r.listed).slice(0, 200).map((r) => ({ id: r.productId, name: r.name, store: r.channel === "woocommerce" ? "WooCommerce" : r.channel === "allegro" ? "Allegro" : r.channel }));
+  const catalog = prod.filter((r) => r.listed).slice(0, 200).map((r) => ({ id: r.productId, name: r.name, imageUrl: r.imageUrl, store: r.channel === "woocommerce" ? "WooCommerce" : r.channel === "allegro" ? "Allegro" : r.channel }));
   const openId = /^[0-9a-f-]{36}$/.test(sp.draft ?? "") ? sp.draft! : (drafts?.[0]?.id as string | undefined);
   const { data: open } = openId ? await supabase.from("campaign_draft").select("id,platform,title,status,brief,output,created_at").eq("id", openId).eq("workspace_id", current.id).maybeSingle() : { data: null };
   const out = open?.output as BuilderOutput | undefined, brief = open?.brief as BuilderInput | undefined;
   const platform = (open?.platform as keyof typeof PL | undefined) ?? "meta";
+  // Files the person uploaded for this draft are private: show them through short-lived signed addresses.
+  const assetList = (brief?.assets ?? []) as { path: string; kind: "image" | "video" }[];
+  const signed = assetList.length ? (await supabase.storage.from("creatives").createSignedUrls(assetList.map((a) => a.path), 3600)).data ?? [] : [];
+  const signedUrls = signed.map((x) => x.signedUrl).filter(Boolean) as string[];
+  const media = assetList[0]?.kind === "video" ? { images: [], video: signedUrls[0] } : signedUrls.length ? { images: signedUrls } : brief?.productImages?.length ? { images: brief.productImages } : undefined;
 
   return (
     <>
@@ -44,7 +49,7 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
       {sp.notice && <Card style={{ color: "var(--pos)" }}>{sp.notice}</Card>}
       {sp.error && <Card style={{ color: "var(--neg)" }}>{sp.error}</Card>}
 
-      <BuilderWizard currency={current.currency} brand={current.name} catalog={catalog} />
+      <BuilderWizard currency={current.currency} brand={current.name} catalog={catalog} workspaceId={current.id} />
 
       {open && out && (
         <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -54,12 +59,18 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
             <span className={`seo-chip seo-chip-${open.status === "approved" ? "good" : "not_measured"}`}>{open.status === "approved" ? "Approved" : "Draft"}</span>
           </div>
           <div><div className="eyebrow">Audiences</div><ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.audiences.map((a) => <li key={a.name}><b>{a.name}</b>: {a.description}</li>)}</ul></div>
-          {out.spec && (out.spec.warnings.length > 0 || out.spec.checklist.length > 0) && (
+          {out.spec && (out.spec.warnings.length > 0 || out.spec.checklist.length > 0 || (out.spec.creative?.length ?? 0) > 0) && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12 }}>
               {out.spec.warnings.length > 0 && (
                 <div className="raise3d" style={{ border: "1px solid var(--warn)", borderRadius: 12, padding: 14 }}>
                   <div className="eyebrow" style={{ color: "var(--warn)" }}>Check before launch</div>
                   <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.spec.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                </div>
+              )}
+              {out.spec.creative && out.spec.creative.length > 0 && (
+                <div className="raise3d" style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}>
+                  <div className="eyebrow">Your files</div>
+                  <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>{out.spec.creative.map((c) => <li key={c.text} style={{ color: c.ok ? "var(--pos)" : "var(--warn)" }}>{c.ok ? "✓" : "!"} {c.text}</li>)}</ul>
                 </div>
               )}
               {out.spec.checklist.length > 0 && (
@@ -80,7 +91,7 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
                     {out.spec?.ab && i < 2 && <span className="seo-chip seo-chip-attention">A/B</span>}
                     <span style={{ marginLeft: "auto" }}><CopyButton text={[v.headline, v.text, v.description, v.cta && `[${v.cta}]`, ...(out.hashtags ?? [])].filter(Boolean).join("\n")} label="Copy" /></span>
                   </div>
-                  <AdPreview platform={platform} format={out.spec?.format ?? "single"} brand={current.name} headline={v.headline} text={v.text} description={v.description} cta={v.cta || undefined} hashtags={out.hashtags} hook={i === 0 ? out.hook : ""} />
+                  <AdPreview platform={platform} format={out.spec?.format ?? "single"} brand={current.name} headline={v.headline} text={v.text} description={v.description} cta={v.cta || undefined} hashtags={out.hashtags} hook={i === 0 ? out.hook : ""} media={media} />
                 </div>
               ))}
             </div>

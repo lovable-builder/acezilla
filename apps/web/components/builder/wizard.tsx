@@ -1,14 +1,16 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { budgetGuide, MEDIA_PLATFORMS, MEDIA_SPECS, type MediaPlatform } from "@acezilla/models";
+import { budgetGuide, creativeChecks, MEDIA_PLATFORMS, MEDIA_SPECS, type MediaPlatform } from "@acezilla/models";
 import { createDraft } from "@/app/(app)/builder/actions";
 import { BrandLogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
+import { Thumb } from "@/components/app/thumb";
 import { AdPreview } from "./ad-preview";
+import { CreativeUpload, type UploadedAsset } from "./creative-upload";
 
 const STEPS = ["Platform", "Goal & format", "Product & message", "Budget", "Review"];
-export interface CatalogEntry { id: string; name: string; store: string }
+export interface CatalogEntry { id: string; name: string; store: string; imageUrl?: string | null }
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -24,7 +26,7 @@ const Pick = ({ name, value, checked, onChange, children }: { name: string; valu
 );
 
 /** A guided form that follows each platform's own options. One form, five steps; nothing is sent to any ad platform. */
-export function BuilderWizard({ currency, brand, catalog }: { currency: string; brand: string; catalog: CatalogEntry[] }) {
+export function BuilderWizard({ currency, brand, catalog, workspaceId }: { currency: string; brand: string; catalog: CatalogEntry[]; workspaceId: string }) {
   const [step, setStep] = useState(0);
   const [platform, setPlatform] = useState<MediaPlatform>("meta");
   const spec = MEDIA_SPECS[platform];
@@ -37,6 +39,9 @@ export function BuilderWizard({ currency, brand, catalog }: { currency: string; 
   const [offer, setOffer] = useState("");
   const [budget, setBudget] = useState("");
   const [ab, setAb] = useState(false);
+  const [assets, setAssets] = useState<UploadedAsset[]>([]);
+  const [usePhotos, setUsePhotos] = useState(true);
+  const [pickedName, setPickedName] = useState("");
 
   const fmt = spec.formats.find((f) => f.id === format) ?? spec.formats[0]!;
   const opts = spec.optimizations?.[goal];
@@ -59,6 +64,11 @@ export function BuilderWizard({ currency, brand, catalog }: { currency: string; 
     true, true][step]!;
   const hint = step === 2 ? (fmt.items ? `Pick ${fmt.items.min} to ${fmt.items.max} products.` : "Describe what you are advertising in at least a sentence.") : "";
   const primary = fmt.items ? items.join(", ") : product;
+  // Product photos: for a carousel, the photos of the chosen products; otherwise the product started from.
+  const photoOf = (name: string) => catalog.find((c) => c.name === name)?.imageUrl ?? null;
+  const productPhotos = (fmt.items ? items.map(photoOf) : [photoOf(pickedName)]).filter((u): u is string => !!u).slice(0, 10);
+  const checks = creativeChecks(platform, format, assets, { cards: fmt.items ? items.length || fmt.items.min : undefined });
+  const media = assets.length ? (assets[0]!.kind === "video" ? { images: [], video: assets[0]!.preview } : { images: assets.map((a) => a.preview) }) : usePhotos && productPhotos.length ? { images: productPhotos } : undefined;
 
   return (
     <form action={createDraft} className="bw">
@@ -133,6 +143,7 @@ export function BuilderWizard({ currency, brand, catalog }: { currency: string; 
                 {shown.map((c) => (
                   <label key={`${c.store}|${c.id}`} className="bw-pick" style={{ flexDirection: "row", alignItems: "center", padding: "8px 12px", gap: 10 }}>
                     <input type="checkbox" checked={items.includes(c.name)} onChange={() => toggle(c.name)} />
+                    <Thumb src={c.imageUrl} name={c.name} size={36} />
                     <span style={{ flex: 1, overflowWrap: "anywhere" }}>{c.name}</span><span className="eyebrow">{c.store}</span>
                   </label>
                 ))}
@@ -146,11 +157,27 @@ export function BuilderWizard({ currency, brand, catalog }: { currency: string; 
               {catalog.length > 0 && (
                 <span style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                   <span className="eyebrow" style={{ alignSelf: "center" }}>Start from</span>
-                  {catalog.slice(0, 5).map((c) => <button key={`${c.store}|${c.id}`} type="button" className="nav-item" style={{ width: "fit-content", cursor: "pointer", border: "1px solid var(--line2)", fontSize: 12, padding: "4px 10px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} onClick={() => setProduct((p) => p || c.name)} title={c.name}>{c.name}</button>)}
+                  {catalog.slice(0, 5).map((c) => <button key={`${c.store}|${c.id}`} type="button" className="nav-item" style={{ width: "fit-content", cursor: "pointer", border: "1px solid var(--line2)", fontSize: 12, padding: "4px 10px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} onClick={() => { setProduct((p) => p || c.name); setPickedName(c.name); }} title={c.name}><Thumb src={c.imageUrl} name={c.name} size={20} /> {c.name}</button>)}
                 </span>
               )}
             </label>
           )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div><div className="eyebrow">Pictures and video</div><p className="sub" style={{ margin: "2px 0 0", fontSize: 13 }}>Used for the preview and checked against {spec.short}&apos;s shapes. They are not sent anywhere.</p></div>
+            {productPhotos.length > 0 && (
+              <label className="bw-switch">
+                <input type="checkbox" checked={usePhotos} onChange={(e) => setUsePhotos(e.target.checked)} /><span className="track" />
+                <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontWeight: 600 }}>Use my product photos</b>{productPhotos.slice(0, 5).map((u) => <Thumb key={u} src={u} name="" size={30} />)}</span>
+              </label>
+            )}
+            {usePhotos && productPhotos.length > 0 && <input type="hidden" name="productImages" value={JSON.stringify(productPhotos)} />}
+            <CreativeUpload workspaceId={workspaceId} assets={assets} onChange={setAssets} />
+            {(assets.length > 0 || platform === "tiktok" || format === "pmax") && (
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                {checks.map((c) => <li key={c.text} style={{ color: c.ok ? "var(--pos)" : "var(--warn)" }}>{c.ok ? "✓" : "!"} {c.text}</li>)}
+              </ul>
+            )}
+          </div>
           <label className="bw-label"><span className="eyebrow">Offer or promotion (optional)</span><input name="offer" className="field" maxLength={300} value={offer} onChange={(e) => setOffer(e.target.value)} placeholder="Free delivery over 200 PLN" /></label>
           <label className="bw-label"><span className="eyebrow">Who is it for? (optional)</span><input name="audience" className="field" maxLength={300} placeholder="Women 25-45 buying gifts, in Poland" /></label>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -203,7 +230,7 @@ export function BuilderWizard({ currency, brand, catalog }: { currency: string; 
 
       <aside style={{ position: "sticky", top: 90, display: "flex", flexDirection: "column", gap: 10 }} aria-label="Preview">
         <div className="eyebrow">Live preview</div>
-        <AdPreview platform={platform} format={format} brand={brand} headline={platform === "google" ? "Your headline" : "Your headline here"} text={primary.slice(0, platform === "tiktok" ? 100 : platform === "google" ? 90 : 125)} cta={spec.ctas[0] ?? "Shop now"} />
+        <AdPreview platform={platform} format={format} brand={brand} headline={platform === "google" ? "Your headline" : "Your headline here"} text={primary.slice(0, platform === "tiktok" ? 100 : platform === "google" ? 90 : 125)} cta={spec.ctas[0] ?? "Shop now"} media={media} />
         <div className="sub" style={{ margin: 0, fontSize: 12 }}>A rough picture of layout and length. The real text is written when you draft.</div>
       </aside>
     </form>

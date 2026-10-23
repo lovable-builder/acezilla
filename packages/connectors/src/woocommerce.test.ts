@@ -79,9 +79,9 @@ test("parses pings, single and batched orders, disconnects, and refuses junk", (
 });
 
 test("products: only real products pass, trashed ones are removals, numbers are clamped", () => {
-  const ok = mapPushedProduct({ id: 12, name: "  Lampka  ", sku: "L-1", price: "49.90", status: "publish", stock_status: "instock", stock_quantity: 4, type: "simple", total_sales: 3 });
+  const ok = mapPushedProduct({ id: 12, name: "  Lampka  ", sku: "L-1", price: "49.90", status: "publish", stock_status: "instock", stock_quantity: 4, type: "simple", total_sales: 3, image: "https://rimfya.pl/wp-content/uploads/lamp.jpg" });
   assert.ok(ok && "keep" in ok); if (!ok || !("keep" in ok)) return;
-  assert.deepEqual(ok.keep, { externalId: "12", name: "Lampka", sku: "L-1", price: 49.9, status: "publish", stockStatus: "instock", stockQty: 4, productType: "simple", totalSales: 3 });
+  assert.deepEqual(ok.keep, { externalId: "12", name: "Lampka", sku: "L-1", price: 49.9, status: "publish", stockStatus: "instock", stockQty: 4, productType: "simple", totalSales: 3, imageUrl: "https://rimfya.pl/wp-content/uploads/lamp.jpg" });
   assert.deepEqual(mapPushedProduct({ id: 5, name: "x", status: "trash" }), { remove: "5" });
   assert.equal(mapPushedProduct({ id: 0, name: "x" }), null); assert.equal(mapPushedProduct({ id: 3, name: "" }), null); assert.equal(mapPushedProduct("nope"), null);
   const odd = mapPushedProduct({ id: 7, name: "n", price: "", total_sales: -4 });
@@ -102,4 +102,10 @@ test("order lines come with a counted order: per-unit price before tax, bad line
   assert.deepEqual(m.lines, [{ lineKey: "woo:9:1", orderExternalId: "woo:9", productId: "55", name: "Lampka", qty: 2, unitPrice: 40 }]);
   const gone = mapPushedOrder({ id: 10, status: "cancelled", created_gmt: "2026-10-01T10:00:00Z", total: 50, items: [{ id: 1, product_id: 55, qty: 1, total: 50 }] });
   assert.ok(gone && "remove" in gone);
+});
+
+test("image addresses are accepted only as plain https URLs", async () => {
+  const { safeImageUrl } = await import("./image-url");
+  assert.equal(safeImageUrl("https://cdn.shop.pl/a.jpg"), "https://cdn.shop.pl/a.jpg");
+  for (const bad of ["http://cdn.shop.pl/a.jpg", "javascript:alert(1)", "data:image/png;base64,AAAA", "https://user:pw@cdn.shop.pl/a.jpg", "https://localhost/a.jpg", "not a url", 42, null, "https://x.pl/" + "a".repeat(600)]) assert.equal(safeImageUrl(bad), null, String(bad));
 });
