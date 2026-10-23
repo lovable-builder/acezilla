@@ -14,7 +14,7 @@ import { isXlsx, MAX_REPORT_BYTES, parseAdsReport, xlsxToTsv } from "@acezilla/c
 /** Only the period parameters survive a round trip, so a form cannot send the user somewhere else. */
 const safeQs = (v: FormDataEntryValue | null) => {
   const q = String(v ?? "");
-  return /^(days=\d{1,3}|from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2})$/.test(q) ? q : "days=30";
+  return /^(days=\d{1,3}|from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2})(&store=(allegro|woocommerce))?$/.test(q) ? q : "days=30";
 };
 const back = (qs: string, msg?: { notice?: string; error?: string }) => {
   revalidatePath("/attribution");
@@ -27,15 +27,16 @@ export async function saveOfferCost(formData: FormData) {
   try {
     const { workspace } = await requireWriter();
     const offerId = String(formData.get("offerId") ?? "");
+    const platform = formData.get("platform") === "woocommerce" ? "woocommerce" : "allegro";
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(offerId)) throw new Error("Unknown offer");
     const raw = String(formData.get("unitCost") ?? "").trim().replace(",", ".");
     const admin = createAdminClient();
     if (raw === "") {
-      await admin.from("offer_cost").delete().eq("workspace_id", workspace.id).eq("platform", "allegro").eq("offer_id", offerId);
+      await admin.from("offer_cost").delete().eq("workspace_id", workspace.id).eq("platform", platform).eq("offer_id", offerId);
     } else {
       const cost = Number(raw);
       if (!Number.isFinite(cost) || cost < 0 || cost > 1_000_000) throw new Error("Enter a cost of 0 or more");
-      const { error } = await admin.from("offer_cost").upsert({ workspace_id: workspace.id, platform: "allegro", offer_id: offerId, unit_cost: cost, updated_at: new Date().toISOString() }, { onConflict: "workspace_id,platform,offer_id" });
+      const { error } = await admin.from("offer_cost").upsert({ workspace_id: workspace.id, platform, offer_id: offerId, unit_cost: cost, updated_at: new Date().toISOString() }, { onConflict: "workspace_id,platform,offer_id" });
       if (error) throw new Error(error.message);
     }
   } catch (e) { return back(qs, { error: e instanceof Error ? e.message : "Could not save" }); }

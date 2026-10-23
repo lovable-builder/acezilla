@@ -113,3 +113,9 @@ export async function loadCampaignLinks(supabase: SupabaseClient, workspaceId: s
   const { data } = await supabase.from("campaign_product").select("campaign_id,product_channel,product_id").eq("workspace_id", workspaceId).limit(2000);
   return new Map((data ?? []).map((r) => [r.campaign_id as string, { channel: r.product_channel as string, productId: r.product_id as string }]));
 }
+
+/** Per-product unit costs a person entered for one store (offer_cost holds them for every store, by platform). */
+export async function loadUnitCosts(supabase: SupabaseClient, workspaceId: string, platform: string) {
+  const { data } = await supabase.from("offer_cost").select("offer_id,unit_cost").eq("workspace_id", workspaceId).eq("platform", platform);
+  return new Map((data ?? []).map((c) => [c.offer_id as string, Number(c.unit_cost)]));
+}

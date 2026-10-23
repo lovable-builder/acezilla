@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PairBars, ProfitBars } from "@/components/dash/bars";
 import { PricingAdvisor } from "@/components/attribution/pricing-advisor";
-import { buildPricingModel } from "@acezilla/models";
+import { buildPricingModel, buildStoreProductProfit } from "@acezilla/models";
+import { adSpendByProduct } from "@/lib/campaign-products";
+import { loadCampaignLinks, loadProducts, loadUnitCosts } from "@/lib/data";
+import { shiftDate } from "@acezilla/models";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money, PLATFORM, x } from "@/lib/format";
 import { parsePeriod, periodQs, todayIso, windowStart } from "@/lib/period";
@@ -17,7 +20,7 @@ export const dynamic = "force-dynamic";
 const pct = (n: number | null, d = 0) => (n === null ? "—" : `${(n * 100).toFixed(d)}%`);
 const label = (p: string) => PLATFORM[p]?.label ?? p.replace(/^./, (c) => c.toUpperCase());
 
-export default async function Attribution({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string; notice?: string; error?: string }> }) {
+export default async function Attribution({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string; store?: string; notice?: string; error?: string }> }) {
   const sp = await searchParams;
   const period = parsePeriod(sp);
   const qs = periodQs(period);
@@ -40,6 +43,16 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
   const profit = await loadOfferProfit(supabase, current.id, start, endDate);
   const adImports = profit ? await loadAdImports(supabase, current.id) : [];
   const pricingModels = profit ? profit.offers.map((o) => buildPricingModel(o, profit.vatRate)).filter((m): m is NonNullable<typeof m> => m !== null) : [];
+
+  // Store detail: Allegro and WooCommerce today, TikTok Shop later. The cross-store sections above stay on every tab.
+  const { data: wooConn } = await supabase.from("connection").select("id").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
+  const hasAllegro = !!profit, hasWoo = !!wooConn;
+  const tab: "allegro" | "woocommerce" | null = sp.store === "woocommerce" && hasWoo ? "woocommerce" : sp.store === "allegro" && hasAllegro ? "allegro" : hasAllegro ? "allegro" : hasWoo ? "woocommerce" : null;
+  const wooData = tab === "woocommerce" ? await (async () => {
+    const [{ rows: prod }, links, costs] = await Promise.all([loadProducts(supabase, current.id, start, endDate), loadCampaignLinks(supabase, current.id), loadUnitCosts(supabase, current.id, "woocommerce")]);
+    return { ...buildStoreProductProfit({ rows: prod, channel: "woocommerce", costs, adSpend: adSpendByProduct(rows, prod, links, start, endDate) }), catalogEmpty: !prod.some((r) => r.channel === "woocommerce") };
+  })() : null;
+  const storeQs = (st: string) => `${qs}&store=${st}`;
 
   const noData = orders.length === 0 && !d && !profit;
   return (
@@ -110,9 +123,55 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
         </section>
       )}
 
-      {profit && (
+      {(hasAllegro || hasWoo) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }} role="tablist" aria-label="Store detail">
+          <span className="eyebrow">Store detail</span>
+          {hasAllegro && <Link role="tab" aria-selected={tab === "allegro"} href={`/attribution?${storeQs("allegro")}`} className={`nav-item${tab === "allegro" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>Allegro</Link>}
+          {hasWoo && <Link role="tab" aria-selected={tab === "woocommerce"} href={`/attribution?${storeQs("woocommerce")}`} className={`nav-item${tab === "woocommerce" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>WooCommerce</Link>}
+          <span className="nav-item" aria-disabled="true" title="TikTok Shop is not connectable yet" style={{ width: "fit-content", padding: "6px 14px", opacity: 0.55, cursor: "default" }}>TikTok Shop<span className="nav-soon">Soon</span></span>
+        </div>
+      )}
+
+      {tab === "woocommerce" && wooData && (
+        <section id="woo" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <h2 className="h2" style={{ margin: 0 }}><span className="n">03</span>WooCommerce: profit per product</h2>
+          <div className="kpis">
+            <div className="kpi"><span className="eyebrow">Net sales</span><span className="tabnum" style={{ fontSize: 22, fontWeight: 600 }}>{money(wooData.totals.revenue, cur)}</span><span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{int(wooData.totals.units)} units · before tax</span></div>
+            <div className="kpi"><span className="eyebrow">Ads on these products</span><span className="tabnum" style={{ fontSize: 22, fontWeight: 600 }}>{money(wooData.totals.ads, cur)}</span><span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>campaigns linked to a product</span></div>
+            <div className="kpi"><span className="eyebrow">Profit{wooData.missingCosts > 0 ? " (so far)" : ""}</span><span className="tabnum" style={{ fontSize: 22, fontWeight: 600, color: wooData.totals.profit < 0 ? "var(--neg)" : "var(--ink)" }}>{money(wooData.totals.profit, cur)}</span><span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>sales − goods − ads</span></div>
+          </div>
+          {wooData.catalogEmpty && <Card style={{ borderColor: "var(--warn)" }}>Your WooCommerce product list has not arrived. Update the acezilla plugin to the latest version and open your WordPress admin once.</Card>}
+          {wooData.missingCosts > 0 && <Card style={{ borderColor: "var(--warn)" }}>{wooData.missingCosts} product{wooData.missingCosts === 1 ? " has" : "s have"} no cost per unit yet, so {wooData.missingCosts === 1 ? "its profit is" : "their profits are"} not shown. Enter the net cost of one unit (before tax) in the table.</Card>}
+          <Card style={{ overflowX: "auto", padding: 0 }}>
+            <table className="t tabnum" style={{ margin: 0 }}>
+              <thead><tr><th style={{ textAlign: "left" }}>Product</th><th>Units</th><th>Net sales</th><th>Ads</th><th>Cost per unit</th><th>Profit</th><th>Margin</th></tr></thead>
+              <tbody>
+                {wooData.rows.map((r) => (
+                  <tr key={r.productId} style={{ opacity: r.units === 0 && r.ads === 0 ? 0.7 : 1 }}>
+                    <td style={{ textAlign: "left", maxWidth: 300, overflowWrap: "anywhere" }}>{r.name}{r.units === 0 && <span className="sub" style={{ marginLeft: 8, fontSize: 12 }}>no sales</span>}</td>
+                    <td>{int(r.units)}</td><td>{money(r.revenue, cur)}</td><td>{r.ads > 0 ? money(r.ads, cur) : "—"}</td>
+                    <td>
+                      <form action={saveOfferCost} style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <input type="hidden" name="qs" value={storeQs("woocommerce")} /><input type="hidden" name="offerId" value={r.productId} /><input type="hidden" name="platform" value="woocommerce" />
+                        <input name="unitCost" className="field" inputMode="decimal" defaultValue={r.unitCost ?? ""} placeholder="cost" aria-label={`Cost per unit for ${r.name}`} style={{ width: 80, padding: "4px 8px" }} />
+                        <Button variant="ghost" size="sm">Save</Button>
+                      </form>
+                    </td>
+                    <td style={{ fontWeight: 600, color: r.profit === null ? "var(--ink3)" : r.profit < 0 ? "var(--neg)" : "var(--ink)" }}>{r.profit === null ? "needs cost" : money(r.profit, cur)}</td>
+                    <td style={{ color: "var(--ink3)" }}>{r.profit === null || r.revenue <= 0 ? "—" : pct(r.profit / r.revenue, 1)}</td>
+                  </tr>
+                ))}
+                {wooData.rows.length === 0 && <tr><td colSpan={7} style={{ textAlign: "left" }}>No WooCommerce products or sales yet.</td></tr>}
+              </tbody>
+            </table>
+          </Card>
+          <p className="sub" style={{ fontSize: 12, margin: 0 }}>Profit = net sales (before tax) − cost of the goods sold − ad spend of the campaigns linked to the product. Payment-gateway fees and shipping you pay are not in WooCommerce&apos;s data, so they are not included. Link campaigns to products on the Command center.</p>
+        </section>
+      )}
+
+      {profit && tab === "allegro" && (
         <section id="offers" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <h2 className="h2" style={{ margin: 0 }}><span className="n">03</span>Allegro offers: profit per offer</h2>
+          <h2 className="h2" style={{ margin: 0 }}><span className="n">03</span>Allegro: profit per offer</h2>
           <div className="kpis">
             <div className="kpi"><span className="eyebrow">Net sales</span><span className="tabnum" style={{ fontSize: 22, fontWeight: 600 }}>{money(profit.totals.revenue, cur)}</span><span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{int(profit.totals.units)} units</span></div>
             <div className="kpi"><span className="eyebrow">Allegro fees</span><span className="tabnum" style={{ fontSize: 22, fontWeight: 600 }}>{money(profit.totals.fees, cur)}</span><span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{pct(profit.totals.revenue > 0 ? profit.totals.fees / profit.totals.revenue : null, 1)} of sales</span></div>

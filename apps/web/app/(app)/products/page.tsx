@@ -7,7 +7,7 @@ import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money } from "@/lib/format";
 import { parsePeriod, todayIso, windowStart } from "@/lib/period";
 import { loadAdRows, loadCampaignLinks, loadProducts } from "@/lib/data";
-import { resolveCampaignProducts } from "@/lib/campaign-products";
+import { adSpendByProduct } from "@/lib/campaign-products";
 import { shiftDate, stockLevel, type StockLevel } from "@acezilla/models";
 
 export const metadata = { title: "Products · acezilla" };
@@ -30,13 +30,7 @@ export default async function Products({ searchParams }: { searchParams: Promise
   // Which products have an ad running: campaigns are matched to products by a person's link, or a strict name match.
   const adRows = connected.length ? await loadAdRows(supabase, current.id) : [];
   const links = connected.length ? await loadCampaignLinks(supabase, current.id) : new Map<string, { channel: string; productId: string }>();
-  const campaigns = [...new Map(adRows.map((r) => [r.campaignId, { campaignId: r.campaignId, name: r.campaignName, platform: r.platform }])).values()];
-  const cp = resolveCampaignProducts(campaigns, rows, links);
-  const since = shiftDate(end, -29);
-  const spendBy = new Map<string, number>();
-  for (const r of adRows) if (r.date >= since && r.date <= end) spendBy.set(r.campaignId, (spendBy.get(r.campaignId) ?? 0) + r.spend);
-  const adSpend = new Map<string, number>();
-  for (const [cid, link] of cp) { const k = `${link.product.channel}|${link.product.productId}`; adSpend.set(k, (adSpend.get(k) ?? 0) + (spendBy.get(cid) ?? 0)); }
+  const adSpend = adSpendByProduct(adRows, rows, links, shiftDate(end, -29), end);
   const level = (r: (typeof rows)[number]): StockLevel => stockLevel({ qty: r.stockQty, status: r.stock });
   const spendOf = (r: (typeof rows)[number]) => adSpend.get(`${r.channel}|${r.productId}`) ?? 0;
   const FILTERS = [["all", "All"], ["best", "Best sellers"], ["noads", "No ads"], ["low", "Low stock"], ["out", "Out of stock"]] as const;

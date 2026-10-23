@@ -29,3 +29,21 @@ export function buildProductList(o: { catalog: CatalogItem[]; lines: SoldLine[];
   return [...m.values()].map((r) => ({ ...r, revenue: r2(r.revenue) }))
     .sort((a, b) => b.revenue - a.revenue || b.units - a.units || a.name.localeCompare(b.name));
 }
+
+export interface StoreProfitRow extends ProductRow {
+  /** Net cost of one unit, as entered. */ unitCost: number | null;
+  /** Ad spend of the campaigns linked to the product, in the period. */ ads: number;
+  /** Sales minus goods cost minus ad spend. Null until a cost per unit is entered. Payment and shipping costs are not included. */ profit: number | null;
+}
+/**
+ * Profit per product for a store that has no marketplace fees in its data (WooCommerce): net sales, minus the goods sold at the
+ * entered cost, minus the ad spend of campaigns linked to the product. Products that neither sold nor are listed are left out.
+ */
+export function buildStoreProductProfit(o: { rows: ProductRow[]; channel: string; costs: Map<string, number>; adSpend: Map<string, number> }) {
+  const rows: StoreProfitRow[] = o.rows.filter((r) => r.channel === o.channel && (r.listed || r.units > 0)).map((r) => {
+    const unitCost = o.costs.get(r.productId) ?? null, ads = r2(o.adSpend.get(`${r.channel}|${r.productId}`) ?? 0);
+    return { ...r, unitCost, ads, profit: unitCost === null ? null : r2(r.revenue - unitCost * r.units - ads) };
+  }).sort((a, b) => b.revenue - a.revenue || b.ads - a.ads || a.name.localeCompare(b.name));
+  const priced = rows.filter((r) => r.profit !== null);
+  return { rows, totals: { revenue: r2(rows.reduce((s, r) => s + r.revenue, 0)), ads: r2(rows.reduce((s, r) => s + r.ads, 0)), units: rows.reduce((s, r) => s + r.units, 0), profit: r2(priced.reduce((s, r) => s + (r.profit ?? 0), 0)) }, missingCosts: rows.filter((r) => r.units > 0 && r.unitCost === null).length };
+}
