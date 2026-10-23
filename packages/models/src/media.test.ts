@@ -22,7 +22,7 @@ test("a budget guide is sized in the workspace currency, sales needs more on Met
 test("the launch checklist asks for a pixel only when the goal needs one", () => {
   assert.ok(launchChecklist("meta", "single", "sales").some((r) => /Pixel/.test(r)));
   assert.ok(!launchChecklist("meta", "single", "traffic").some((r) => /Pixel/.test(r)));
-  assert.ok(launchChecklist("meta", "carousel", "traffic").some((r) => /10 products/.test(r)));
+  assert.ok(launchChecklist("meta", "carousel", "traffic").some((r) => /2 to 10 cards/.test(r)));
   assert.ok(launchChecklist("google", "pmax", "sales").includes("A square logo"));
 });
 
@@ -153,4 +153,9 @@ test("carousel cards: listing photos and uploads together make the cards, in ord
   assert.deepEqual((cleanBuilderInput({ platform: "meta", goal: "traffic", format: "single", product: "Handmade leather wallets", cards: JSON.stringify([{ label: "x", url: "https://a.b/c.jpg" }]) }) as { value: { cards: unknown[] } }).value.cards, []);
   assert.ok(creativeChecks("meta", "carousel", [], { cards: 3, cardImages: 3 }).every((c) => c.ok));
   assert.ok(creativeChecks("meta", "carousel", [], { cards: 3, cardImages: 1 }).some((c) => !c.ok && /1 of 3/.test(c.text)));
+});
+
+test("with no uploaded files the creative checks do not claim the files are fine", () => {
+  assert.deepEqual(creativeChecks("meta", "carousel", [], { cards: 3, cardImages: 3 }).map((c) => c.text), ["3 cards, each with a picture."]);
+  assert.ok(creativeChecks("meta", "carousel", [img("a", 1080, 1080), img("b", 1080, 1080)], { cards: 2 }).some((c) => /ratio Meta shows well/.test(c.text)));
 });

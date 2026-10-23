@@ -51,7 +51,12 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
       {sp.notice && <Card style={{ color: "var(--pos)" }}>{sp.notice}</Card>}
       {sp.error && <Card style={{ color: "var(--neg)" }}>{sp.error}</Card>}
 
-      <BuilderWizard currency={current.currency} brand={current.name} catalog={catalog} workspaceId={current.id} />
+      {open && out ? (
+        <details className="card" style={{ padding: 0 }}>
+          <summary style={{ cursor: "pointer", padding: "14px 18px", fontWeight: 600 }}>＋ Start a new campaign</summary>
+          <div style={{ padding: "0 18px 18px" }}><BuilderWizard currency={current.currency} brand={current.name} catalog={catalog} workspaceId={current.id} /></div>
+        </details>
+      ) : <BuilderWizard currency={current.currency} brand={current.name} catalog={catalog} workspaceId={current.id} />}
 
       {open && out && (
         <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -104,7 +109,7 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
           {out.keywords.length > 0 && <div><div className="eyebrow">Keywords</div><div className="mono" style={{ fontSize: 13, marginTop: 6 }}>{out.keywords.map((k) => `${k.term} (${k.matchType})`).join("  ·  ")}</div>{out.negativeKeywords.length > 0 && <div className="sub" style={{ fontSize: 13, marginBottom: 0 }}>Negative: {out.negativeKeywords.join(", ")}</div>}</div>}
           <div><div className="eyebrow">Budget</div><p style={{ margin: "4px 0 0" }}>{out.budgetNote}</p></div>
           <div><div className="eyebrow">Test plan</div><ol style={{ margin: "6px 0 0", paddingLeft: 18, listStyle: "decimal" }}>{out.testPlan.map((t) => <li key={t}>{t}</li>)}</ol></div>
-          <div><div className="eyebrow">Check before launch</div><ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.risks.map((t) => <li key={t}>{t}</li>)}</ul></div>
+          <div><div className="eyebrow">Worth double-checking</div><ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.risks.map((t) => <li key={t}>{t}</li>)}</ul></div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <CopyButton text={draftText(out, platform)} label="Copy whole draft" />
             {open.status !== "approved" && <form action={approveDraft}><input type="hidden" name="id" value={open.id as string} /><Button variant="outline">Mark as reviewed and approved</Button></form>}

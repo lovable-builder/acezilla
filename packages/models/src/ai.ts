@@ -250,6 +250,7 @@ ${DATA_RULES}
 - Write all ad text in the requested language. Do not make health, income or "guaranteed result" claims. Do not name competitors. Do not include links.
 - Platform: ${p}. Format: ${format}. ${FORMAT_RULES[format] ?? ""}
 - Limits in characters: ${p === "meta" ? `headline ${l.headline}, primary text ${l.text}, description ${l.description}` : google ? `headline ${l.headline}, description (use "text") ${l.text}` : `ad text (use "text") ${l.text}`}. Respect them exactly. ${p === "tiktok" ? 'Leave "headline" and "description" empty.' : google ? 'Leave "description" empty.' : ""} Use a call to action that suits the platform${p === "meta" ? `, chosen from: ${MEDIA_SPECS.meta.ctas.join(", ")}` : p === "tiktok" ? ", for example Shop now or Learn more" : ", for example Shop now"}.
+- Put hashtags only in "hashtags", never inside the ad text. Do not repeat the button label (for example "Shop now") inside the text: the button already says it.
 - "variants": 3 to 5 different ad texts, each testing a different angle. If the brief asks for an A/B test, the first two variants must be an A/B pair: identical except for one element (the opening line or the headline), and say which in "testPlan".
 - "audiences": 2 to 4 audiences with a one-sentence reason each. Use the audience the owner described and keep any demographic or location they gave as is.
 - ${search ? `"keywords": 8 to ${SEARCH_MAX_KEYWORDS} search terms with a matchType of exact, phrase or broad; "negativeKeywords": up to 10.` : '"keywords" and "negativeKeywords" must be empty lists.'}

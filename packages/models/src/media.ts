@@ -24,7 +24,7 @@ export const MEDIA_SPECS: Record<MediaPlatform, PlatformSpec> = {
     label: "Meta · Facebook & Instagram", short: "Meta", pitch: "Feed and Stories on Facebook and Instagram. The broadest reach for products people can see.",
     formats: [
       { id: "single", label: "Single image or video", hint: "One creative. The simplest way to start." },
-      { id: "carousel", label: "Carousel of products", hint: "2 to 10 products in one ad.", items: { min: 2, max: 10 } },
+      { id: "carousel", label: "Carousel", hint: "2 to 10 cards, each one picture.", items: { min: 2, max: 10 } },
     ],
     goals: [
       { id: "sales", label: "Sales", hint: "Optimise for purchases on your site.", needs: "Meta Pixel" },
@@ -39,7 +39,7 @@ export const MEDIA_SPECS: Record<MediaPlatform, PlatformSpec> = {
     ] },
     text: { primary: 125, headline: 40, description: 30 },
     ctas: ["Shop now", "Order now", "Learn more", "Get offer", "Sign up", "Contact us", "Send message", "Book now"],
-    requirements: { all: ["An image at 1:1, 4:5 or 9:16, or a short video", "A Meta Pixel on your site if the goal is Sales"], carousel: ["At least 2 and at most 10 products, each with its own image"] },
+    requirements: { all: ["An image at 1:1, 4:5 or 9:16, or a short video", "A Meta Pixel on your site if the goal is Sales"], carousel: ["2 to 10 cards, each with its own picture"] },
   },
   tiktok: {
     label: "TikTok", short: "TikTok", pitch: "Short vertical video. Best when you have a video that feels native to the feed.",
@@ -211,7 +211,7 @@ export function creativeChecks(platform: MediaPlatform, format: string, assets: 
       out.push(have >= need ? { ok: true, text: `${have} cards, each with a picture.` } : { ok: false, text: `${have} of ${need} cards have a picture. A carousel needs at least ${CAROUSEL_MIN}.` });
     } else if (assets.length === 0) return [{ ok: false, text: "Add an image or a short video." }];
     for (const a of assets) { const r = ratioName(a.w, a.h); if (!["1:1", "4:5", "9:16"].includes(r)) out.push({ ok: false, text: `${a.name} is ${r}. Meta works best with 1:1, 4:5 or 9:16.` }); }
-    if (out.every((c) => c.ok) || out.length === 0) out.push({ ok: true, text: "Files are in a ratio Meta shows well." });
+    if (assets.length > 0 && out.every((c) => c.ok)) out.push({ ok: true, text: "Your files are in a ratio Meta shows well." });
     return out;
   }
   if (format === "pmax") {
