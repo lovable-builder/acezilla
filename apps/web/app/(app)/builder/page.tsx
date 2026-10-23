@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/seo/copy-button";
 import { BUILDER_LIMITS, MEDIA_SPECS, type BuilderInput, type BuilderOutput } from "@acezilla/models";
 import { BuilderWizard } from "@/components/builder/wizard";
-import { AdPreview } from "@/components/builder/ad-preview";
+import { PreviewSwitcher } from "@/components/builder/preview-switcher";
 import { loadProducts } from "@/lib/data";
 import { todayIso, windowStart } from "@/lib/period";
 import Link from "next/link";
@@ -34,7 +34,7 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
   const out = open?.output as BuilderOutput | undefined, brief = open?.brief as BuilderInput | undefined;
   const platform = (open?.platform as keyof typeof PL | undefined) ?? "meta";
   // Files the person uploaded for this draft are private: show them through short-lived signed addresses.
-  const assetList = (brief?.assets ?? []) as { path: string; kind: "image" | "video" }[];
+  const assetList = (brief?.assets ?? []) as { path: string; kind: "image" | "video"; w: number; h: number }[];
   const signed = assetList.length ? (await supabase.storage.from("creatives").createSignedUrls(assetList.map((a) => a.path), 3600)).data ?? [] : [];
   const signedUrls = signed.map((x) => x.signedUrl).filter(Boolean) as string[];
   const media = assetList[0]?.kind === "video" ? { images: [], video: signedUrls[0] } : signedUrls.length ? { images: signedUrls } : brief?.productImages?.length ? { images: brief.productImages } : undefined;
@@ -83,17 +83,17 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
           )}
           <div>
             <div className="eyebrow">Ads · {out.variants.length} variants{out.spec?.ab ? " · first two are an A/B pair" : ""}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 14, marginTop: 8 }}>
-              {out.variants.map((v, i) => (
-                <div key={i} className="rise" style={{ "--i": i, display: "flex", flexDirection: "column", gap: 8 } as React.CSSProperties}>
+            <div style={{ marginTop: 8 }}>
+              <PreviewSwitcher platform={platform} format={out.spec?.format ?? "single"} columns={2} label="Placement" items={out.variants.map((v, i) => ({
+                brand: current.name, headline: v.headline, text: v.text, description: v.description, cta: v.cta || undefined, hashtags: out.hashtags, hook: i === 0 ? out.hook : "", media, mediaRatio: assetList[0] ? assetList[0].w / assetList[0].h : null,
+                title: (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <b style={{ fontWeight: 600 }}>Variant {String.fromCharCode(65 + i)}</b>
                     {out.spec?.ab && i < 2 && <span className="seo-chip seo-chip-attention">A/B</span>}
                     <span style={{ marginLeft: "auto" }}><CopyButton text={[v.headline, v.text, v.description, v.cta && `[${v.cta}]`, ...(out.hashtags ?? [])].filter(Boolean).join("\n")} label="Copy" /></span>
                   </div>
-                  <AdPreview platform={platform} format={out.spec?.format ?? "single"} brand={current.name} headline={v.headline} text={v.text} description={v.description} cta={v.cta || undefined} hashtags={out.hashtags} hook={i === 0 ? out.hook : ""} media={media} />
-                </div>
-              ))}
+                ),
+              }))} />
             </div>
             <p className="sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Limits for {MEDIA_SPECS[platform].short}: {BUILDER_LIMITS[platform].headline ? `headline ${BUILDER_LIMITS[platform].headline}, ` : ""}text {BUILDER_LIMITS[platform].text}{BUILDER_LIMITS[platform].description ? `, description ${BUILDER_LIMITS[platform].description}` : ""} characters. Every variant is inside them.</p>
           </div>

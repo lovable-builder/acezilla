@@ -221,3 +221,35 @@ export function creativeChecks(platform: MediaPlatform, format: string, assets: 
   }
   return out;
 }
+
+// ---------------- where an ad shows, and in what shape ----------------
+
+export interface Placement {
+  id: string; label: string; platform: MediaPlatform;
+  /** Width divided by height of the picture or video area. */ ratio: number; ratioLabel: string;
+  /** Fills the whole phone screen, with the app's own buttons drawn over it. */ fullScreen?: boolean;
+}
+export const PLACEMENTS: Placement[] = [
+  { id: "fb_feed", label: "Facebook feed", platform: "meta", ratio: 1, ratioLabel: "1:1" },
+  { id: "ig_feed", label: "Instagram feed", platform: "meta", ratio: 4 / 5, ratioLabel: "4:5" },
+  { id: "stories", label: "Stories", platform: "meta", ratio: 9 / 16, ratioLabel: "9:16", fullScreen: true },
+  { id: "reels", label: "Reels", platform: "meta", ratio: 9 / 16, ratioLabel: "9:16", fullScreen: true },
+  { id: "foryou", label: "For You feed", platform: "tiktok", ratio: 9 / 16, ratioLabel: "9:16", fullScreen: true },
+  { id: "search", label: "Search", platform: "google", ratio: 0, ratioLabel: "text" },
+  { id: "display", label: "Display", platform: "google", ratio: 1.91, ratioLabel: "1.91:1" },
+  { id: "square", label: "Square", platform: "google", ratio: 1, ratioLabel: "1:1" },
+];
+/** The placements worth previewing for a platform and format. Search ads are text only. */
+export function placementsFor(platform: MediaPlatform, format: string): Placement[] {
+  const all = PLACEMENTS.filter((p) => p.platform === platform);
+  if (platform === "google") return format === "search" ? all.filter((p) => p.id === "search") : all.filter((p) => p.id !== "search");
+  if (platform === "meta" && format === "carousel") return all.filter((p) => p.id === "fb_feed" || p.id === "ig_feed");
+  return all;
+}
+/** How a file of this shape sits in a placement: it fits, or the platform will crop it (or add bars). */
+export function fitNote(fileRatio: number | null, p: Placement): { fits: boolean; text: string } | null {
+  if (fileRatio === null || p.ratio === 0) return null;
+  return Math.abs(fileRatio - p.ratio) <= 0.04
+    ? { fits: true, text: `Your file is ${p.ratioLabel}: it fills this placement.` }
+    : { fits: false, text: `This placement is ${p.ratioLabel}. Your file is ${ratioName(Math.round(fileRatio * 1000), 1000)}, so it is cropped to fit from the centre (or shown with bars). Use a ${p.ratioLabel} file.` };
+}

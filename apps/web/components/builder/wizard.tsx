@@ -6,7 +6,7 @@ import { createDraft } from "@/app/(app)/builder/actions";
 import { BrandLogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Thumb } from "@/components/app/thumb";
-import { AdPreview } from "./ad-preview";
+import { PreviewSwitcher } from "./preview-switcher";
 import { CreativeUpload, type UploadedAsset } from "./creative-upload";
 
 const STEPS = ["Platform", "Goal & format", "Product & message", "Budget", "Review"];
@@ -67,6 +67,8 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
   // Product photos: for a carousel, the photos of the chosen products; otherwise the product started from.
   const photoOf = (name: string) => catalog.find((c) => c.name === name)?.imageUrl ?? null;
   const productPhotos = (fmt.items ? items.map(photoOf) : [photoOf(pickedName)]).filter((u): u is string => !!u).slice(0, 10);
+  const first = assets[0];
+  const mediaRatio = first ? first.w / first.h : null;
   const checks = creativeChecks(platform, format, assets, { cards: fmt.items ? items.length || fmt.items.min : undefined });
   const media = assets.length ? (assets[0]!.kind === "video" ? { images: [], video: assets[0]!.preview } : { images: assets.map((a) => a.preview) }) : usePhotos && productPhotos.length ? { images: productPhotos } : undefined;
 
@@ -228,9 +230,9 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
         </div>
       </div>
 
-      <aside style={{ position: "sticky", top: 90, display: "flex", flexDirection: "column", gap: 10 }} aria-label="Preview">
+      <aside style={{ position: "sticky", top: 90, display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }} aria-label="Preview">
         <div className="eyebrow">Live preview</div>
-        <AdPreview platform={platform} format={format} brand={brand} headline={platform === "google" ? "Your headline" : "Your headline here"} text={primary.slice(0, platform === "tiktok" ? 100 : platform === "google" ? 90 : 125)} cta={spec.ctas[0] ?? "Shop now"} media={media} />
+        <PreviewSwitcher platform={platform} format={format} label="Placement" items={[{ brand, headline: platform === "google" ? "Your headline" : "Your headline here", text: primary.slice(0, platform === "tiktok" ? 100 : platform === "google" ? 90 : 125), cta: spec.ctas[0] ?? "Shop now", media, mediaRatio }]} />
         <div className="sub" style={{ margin: 0, fontSize: 12 }}>A rough picture of layout and length. The real text is written when you draft.</div>
       </aside>
     </form>

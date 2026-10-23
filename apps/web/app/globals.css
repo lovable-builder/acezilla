@@ -310,3 +310,35 @@ table.t th:first-child, table.t td:first-child { text-align: left; }
 .ap-phone-screen video, .ap-phone-screen img.ap-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .ap-hook { position: relative; z-index: 1; } .ap-phone-bottom { z-index: 1; }
 .ap-phone-screen .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(0 0 0 / .1), rgb(0 0 0 / .55)); }
+
+/* ---- placement previews at their real shapes ---- */
+.ap-bare { background: transparent; border: 0; box-shadow: none; overflow: visible; }
+.ap-bare .ap-foot { border-top: 0; justify-content: center; }
+.ap .dim { color: var(--ink3); }
+.ap-frame { position: relative; overflow: hidden; width: 100%; background: linear-gradient(135deg, var(--accent-soft), var(--surface2)); }
+.ap-frame > img, .ap-frame > video, .ap-card .ap-frame > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 10px; text-align: center; color: var(--ink3); font: 500 11px var(--font-mono), monospace; text-transform: uppercase; }
+.ap-car-strip { position: absolute; inset: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 78%; gap: 8px; padding: 10px; overflow: hidden; }
+.ap-car-strip img, .ap-car-strip i { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: linear-gradient(135deg, var(--accent-soft), var(--surface)); }
+.ap-avatar.sm { width: 26px; height: 26px; font-size: 12px; } .ap-avatar.ring { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.ap-fb, .ap-ig, .ap-card { display: flex; flex-direction: column; }
+.ap-icons { display: flex; gap: 14px; padding: 8px 14px; color: var(--ink2); }
+.ap-igcta { display: flex; justify-content: space-between; padding: 9px 14px; background: var(--accent); color: #fff; font-weight: 600; font-size: 13px; }
+.ap-card .ap-g { padding: 12px 14px; }
+.ap-phone2 { position: relative; aspect-ratio: 9 / 16; width: 100%; max-width: 250px; margin: 0 auto; border-radius: 28px; overflow: hidden; border: 6px solid #17161B; background: #17161B; color: #fff; box-shadow: var(--lift); }
+.ap-phone2-media { position: absolute; inset: 0; background: linear-gradient(170deg, #1d1b24, #3a2f6b); }
+.ap-phone2-media img, .ap-phone2-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-phone2-media .ap-empty { color: rgb(255 255 255 / .6); }
+.ap-phone2 .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(0 0 0 / .5), transparent 24%, transparent 38%, rgb(0 0 0 / .85)); pointer-events: none; }
+.ap-phone2 .safe { position: absolute; left: 0; right: 0; display: grid; place-items: center; background: repeating-linear-gradient(135deg, rgb(255 80 80 / .28) 0 6px, rgb(255 80 80 / .1) 6px 12px); border-top: 1px dashed rgb(255 160 160 / .9); border-bottom: 1px dashed rgb(255 160 160 / .9); pointer-events: none; }
+.ap-phone2 .safe.top { top: 0; height: 14%; } .ap-phone2 .safe.bottom { bottom: 0; height: 24%; }
+.ap-phone2 .safe i { font: 600 9px var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .05em; background: rgb(0 0 0 / .55); padding: 2px 6px; border-radius: 6px; font-style: normal; }
+.ap-prog { position: absolute; top: 8px; left: 10px; right: 10px; height: 3px; border-radius: 2px; background: rgb(255 255 255 / .35); } .ap-prog i { display: block; width: 40%; height: 100%; background: #fff; border-radius: 2px; }
+.ap-who { position: absolute; top: 18px; left: 10px; right: 10px; display: flex; align-items: center; gap: 6px; font-size: 12px; } .ap-who .dim { color: rgb(255 255 255 / .7); font-size: 10px; } .ap-who.flat { position: static; }
+.ap-bottom { position: absolute; left: 12px; right: 12px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.ap-phone2 .dim { color: rgb(255 255 255 / .75); }
+.ap-cap { overflow-wrap: anywhere; line-height: 1.35; }
+.ap-pill { align-self: center; background: #fff; color: #17161B; font-weight: 600; padding: 7px 16px; border-radius: 999px; }
+.ap-bar2 { background: #fff; color: #17161B; font-weight: 600; text-align: center; padding: 8px; border-radius: 8px; } .ap-bar2.tt { background: #fe2c55; color: #fff; }
+.ap-rail { position: absolute; right: 8px; bottom: 110px; display: flex; flex-direction: column; gap: 10px; font-size: 16px; text-align: center; color: #fff; } .ap-rail span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgb(0 0 0 / .4); }
+.ap-fit { padding: 6px 14px 0; font-size: 12px; } .ap-bare .ap-fit { text-align: center; padding: 8px 0 0; }

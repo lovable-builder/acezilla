@@ -124,3 +124,19 @@ test("uploaded file lists are cleaned: only the uploader's paths, one video or i
   assert.ok(CREATIVE_PATH.test(`${WS}/abc_DEF-1.webp`)); assert.ok(!CREATIVE_PATH.test(`${WS}/a/b.jpg`));
   assert.deepEqual(cleanBuilderInput({ ...base, assets: "not json" }).ok && (cleanBuilderInput({ ...base, assets: "not json" }) as { value: { assets: unknown[] } }).value.assets, []);
 });
+
+import { fitNote, placementsFor, PLACEMENTS } from "./media";
+test("each platform previews its own placements, with Reels and Stories at 9:16", () => {
+  assert.deepEqual(placementsFor("meta", "single").map((p) => p.id), ["fb_feed", "ig_feed", "stories", "reels"]);
+  assert.deepEqual(placementsFor("meta", "carousel").map((p) => p.id), ["fb_feed", "ig_feed"]);
+  assert.deepEqual(placementsFor("tiktok", "video").map((p) => p.id), ["foryou"]);
+  assert.deepEqual(placementsFor("google", "search").map((p) => p.id), ["search"]);
+  assert.deepEqual(placementsFor("google", "pmax").map((p) => p.id), ["display", "square"]);
+  for (const id of ["stories", "reels", "foryou"]) assert.equal(PLACEMENTS.find((p) => p.id === id)!.ratio, 9 / 16);
+});
+test("the fit note says whether a file fills a placement or gets cropped", () => {
+  const reels = PLACEMENTS.find((p) => p.id === "reels")!;
+  assert.equal(fitNote(1080 / 1920, reels)!.fits, true);
+  const sq = fitNote(1, reels)!; assert.equal(sq.fits, false); assert.match(sq.text, /9:16/);
+  assert.equal(fitNote(null, reels), null); assert.equal(fitNote(1, PLACEMENTS.find((p) => p.id === "search")!), null);
+});
