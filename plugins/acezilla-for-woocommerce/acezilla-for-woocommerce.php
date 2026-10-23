@@ -3,7 +3,7 @@
  * Plugin Name:       acezilla for WooCommerce
  * Plugin URI:        https://acezilla.vercel.app
  * Description:       Sends each WooCommerce order's value, date, products and marketing source, and your product list, to acezilla so it can measure real return on ad spend. Read-only: acezilla never changes your store, and customer names, emails and addresses never leave it.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ACEZILLA_WC_VERSION', '1.1.0' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
+define( 'ACEZILLA_WC_VERSION', '1.2.0' ); // keep in step with apps/web/app/(app)/connections/woocommerce/page.tsx
 if ( ! defined( 'ACEZILLA_URL' ) ) {
 	// Override in wp-config.php (define( 'ACEZILLA_URL', 'http://localhost:3000' );) when testing against a local acezilla.
 	define( 'ACEZILLA_URL', 'https://acezilla.vercel.app' );
@@ -326,6 +326,7 @@ function acezilla_wc_product_payload( $product ) {
 		'price'       => '' === $price ? null : round( (float) $price, 2 ),
 		'status'      => (string) $product->get_status(),
 		'stock_status' => (string) $product->get_stock_status(),
+		'stock_quantity' => $product->managing_stock() ? (int) $product->get_stock_quantity() : null,
 		'type'        => (string) $product->get_type(),
 		'total_sales' => (int) $product->get_total_sales(),
 	);

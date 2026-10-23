@@ -5,13 +5,15 @@ import { Card } from "@/components/ui/card";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money } from "@/lib/format";
 import { parsePeriod, todayIso, windowStart } from "@/lib/period";
-import { loadProducts } from "@/lib/data";
+import { loadAdRows, loadCampaignLinks, loadProducts } from "@/lib/data";
+import { resolveCampaignProducts } from "@/lib/campaign-products";
+import { shiftDate, stockLevel, type StockLevel } from "@acezilla/models";
 
 export const metadata = { title: "Products · acezilla" };
 export const dynamic = "force-dynamic";
 const STORE: Record<string, string> = { woocommerce: "WooCommerce", allegro: "Allegro" };
 
-export default async function Products({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string; store?: string }> }) {
+export default async function Products({ searchParams }: { searchParams: Promise<{ days?: string; from?: string; to?: string; store?: string; f?: string }> }) {
   const sp = await searchParams;
   const period = parsePeriod(sp);
   const { supabase, current } = await getWorkspaceContext();
@@ -23,8 +25,26 @@ export default async function Products({ searchParams }: { searchParams: Promise
   const connected = (conns ?? []).map((c) => c.platform as string);
   const { rows, wooCatalogSize } = connected.length ? await loadProducts(supabase, current.id, start, end) : { rows: [], wooCatalogSize: 0 };
   const store = connected.includes(sp.store ?? "") ? sp.store! : null;
-  const shown = store ? rows.filter((r) => r.channel === store) : rows;
-  const qs = period.custom ? `from=${period.custom.from}&to=${period.custom.to}` : `days=${period.days ?? 30}`;
+
+  // Which products have an ad running: campaigns are matched to products by a person's link, or a strict name match.
+  const adRows = connected.length ? await loadAdRows(supabase, current.id) : [];
+  const links = connected.length ? await loadCampaignLinks(supabase, current.id) : new Map<string, { channel: string; productId: string }>();
+  const campaigns = [...new Map(adRows.map((r) => [r.campaignId, { campaignId: r.campaignId, name: r.campaignName, platform: r.platform }])).values()];
+  const cp = resolveCampaignProducts(campaigns, rows, links);
+  const since = shiftDate(end, -29);
+  const spendBy = new Map<string, number>();
+  for (const r of adRows) if (r.date >= since && r.date <= end) spendBy.set(r.campaignId, (spendBy.get(r.campaignId) ?? 0) + r.spend);
+  const adSpend = new Map<string, number>();
+  for (const [cid, link] of cp) { const k = `${link.product.channel}|${link.product.productId}`; adSpend.set(k, (adSpend.get(k) ?? 0) + (spendBy.get(cid) ?? 0)); }
+  const level = (r: (typeof rows)[number]): StockLevel => stockLevel({ qty: r.stockQty, status: r.stock });
+  const spendOf = (r: (typeof rows)[number]) => adSpend.get(`${r.channel}|${r.productId}`) ?? 0;
+  const FILTERS = [["all", "All"], ["best", "Best sellers"], ["noads", "No ads"], ["low", "Low stock"], ["out", "Out of stock"]] as const;
+  const f = FILTERS.some(([k]) => k === sp.f) ? sp.f! : "all";
+  const base = store ? rows.filter((r) => r.channel === store) : rows;
+  const shown = base.filter((r) => f === "all" || (f === "best" && r.units > 0) || (f === "noads" && r.listed && level(r) !== "out" && spendOf(r) <= 0) || (f === "low" && r.listed && level(r) === "low") || (f === "out" && r.listed && level(r) === "out"));
+  const lowCount = rows.filter((r) => r.listed && level(r) === "low").length, outCount = rows.filter((r) => r.listed && level(r) === "out").length;
+  const qsBase = period.custom ? `from=${period.custom.from}&to=${period.custom.to}` : `days=${period.days ?? 30}`;
+  const qs = `${qsBase}${store ? `&store=${store}` : ""}`;
   const wooMissing = connected.includes("woocommerce") && wooCatalogSize === 0;
   const count = (ch: string) => rows.filter((r) => r.channel === ch);
 
@@ -64,28 +84,34 @@ export default async function Products({ searchParams }: { searchParams: Promise
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span className="eyebrow">Store</span>
-            <Link href={`/products?${qs}`} className={`nav-item${store === null ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>All</Link>
-            {connected.map((ch) => <Link key={ch} href={`/products?${qs}&store=${ch}`} className={`nav-item${store === ch ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>{STORE[ch] ?? ch}</Link>)}
+            <Link href={`/products?${qsBase}${f !== "all" ? `&f=${f}` : ""}`} className={`nav-item${store === null ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>All</Link>
+            {connected.map((ch) => <Link key={ch} href={`/products?${qsBase}&store=${ch}${f !== "all" ? `&f=${f}` : ""}`} className={`nav-item${store === ch ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>{STORE[ch] ?? ch}</Link>)}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <span className="eyebrow">Show</span>
+            {FILTERS.map(([k, label]) => <Link key={k} href={`/products?${qs}${k === "all" ? "" : `&f=${k}`}`} className={`nav-item${f === k ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 12px" }}>{label}{k === "low" && lowCount > 0 ? ` · ${lowCount}` : k === "out" && outCount > 0 ? ` · ${outCount}` : ""}</Link>)}
           </div>
           <Card style={{ overflowX: "auto" }}>
             <table className="t tabnum">
-              <thead><tr><th style={{ textAlign: "left" }}>Product</th><th style={{ textAlign: "left" }}>Store</th><th style={{ textAlign: "left" }}>Status</th><th>Price</th><th>Units sold</th><th>Revenue</th></tr></thead>
+              <thead><tr><th style={{ textAlign: "left" }}>Product</th><th style={{ textAlign: "left" }}>Store</th><th style={{ textAlign: "left" }}>Status</th><th style={{ textAlign: "left" }}>Stock</th><th>Price</th><th>Ad spend (30 days)</th><th>Units sold</th><th>Revenue</th></tr></thead>
               <tbody>
                 {shown.map((r) => (
                   <tr key={`${r.channel}|${r.productId}`} style={{ opacity: r.units === 0 ? 0.7 : 1 }}>
                     <td style={{ textAlign: "left", maxWidth: 340, overflowWrap: "anywhere" }}>{r.name}{!r.listed && <span className="seo-chip seo-chip-attention" style={{ marginLeft: 8 }}>No longer listed</span>}</td>
                     <td style={{ textAlign: "left" }}>{STORE[r.channel] ?? r.channel}</td>
                     <td style={{ textAlign: "left", color: "var(--ink3)" }}>{[r.status === "publish" ? "Published" : r.status === "active" ? "Active" : r.status, r.stock === "outofstock" ? "out of stock" : null].filter(Boolean).join(" · ") || "—"}</td>
+                    <td style={{ textAlign: "left" }}>{(() => { const l = level(r); const c = ({ out: ["missing", "Out"], low: ["attention", "Low"], ok: ["good", "In stock"], unknown: null } as const)[l]; return c ? <span className={`seo-chip seo-chip-${c[0]}`} title={r.stockQty !== null ? `${r.stockQty} in stock` : undefined}>{c[1]}{r.stockQty !== null ? ` · ${r.stockQty}` : ""}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>; })()}</td>
                     <td>{r.price === null ? "—" : money(r.price, cur)}</td>
+                    <td style={{ color: spendOf(r) > 0 ? "var(--ink)" : "var(--ink3)" }}>{r.channel === "allegro" ? "—" : spendOf(r) > 0 ? money(spendOf(r), cur) : "No ad"}</td>
                     <td>{int(r.units)}</td>
                     <td style={{ fontWeight: r.revenue > 0 ? 600 : 400, color: r.revenue > 0 ? "var(--ink)" : "var(--ink3)" }}>{r.revenue > 0 ? money(r.revenue, cur) : "No sales"}</td>
                   </tr>
                 ))}
-                {shown.length === 0 && <tr><td colSpan={6} style={{ textAlign: "left" }}>Nothing to show yet.</td></tr>}
+                {shown.length === 0 && <tr><td colSpan={8} style={{ textAlign: "left" }}>{f === "all" ? "Nothing to show yet." : "Nothing matches this filter."}</td></tr>}
               </tbody>
             </table>
           </Card>
-          <p className="sub" style={{ fontSize: 12, margin: 0 }}>Revenue is before tax. Allegro prices include VAT, so the rate set on the Attribution page is taken off. WooCommerce variations are counted under their main product.</p>
+          <p className="sub" style={{ fontSize: 12, margin: 0 }}>Revenue is before tax. Allegro prices include VAT, so the rate set on the Attribution page is taken off. WooCommerce variations are counted under their main product. Ad spend is for campaigns linked to the product, by you or by a close name match; Allegro ads are not split by product here. Stock needs WooCommerce to manage it (or Allegro to report it).</p>
         </>
       )}
     </>

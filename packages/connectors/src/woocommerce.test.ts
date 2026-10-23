@@ -79,9 +79,9 @@ test("parses pings, single and batched orders, disconnects, and refuses junk", (
 });
 
 test("products: only real products pass, trashed ones are removals, numbers are clamped", () => {
-  const ok = mapPushedProduct({ id: 12, name: "  Lampka  ", sku: "L-1", price: "49.90", status: "publish", stock_status: "instock", type: "simple", total_sales: 3 });
+  const ok = mapPushedProduct({ id: 12, name: "  Lampka  ", sku: "L-1", price: "49.90", status: "publish", stock_status: "instock", stock_quantity: 4, type: "simple", total_sales: 3 });
   assert.ok(ok && "keep" in ok); if (!ok || !("keep" in ok)) return;
-  assert.deepEqual(ok.keep, { externalId: "12", name: "Lampka", sku: "L-1", price: 49.9, status: "publish", stockStatus: "instock", productType: "simple", totalSales: 3 });
+  assert.deepEqual(ok.keep, { externalId: "12", name: "Lampka", sku: "L-1", price: 49.9, status: "publish", stockStatus: "instock", stockQty: 4, productType: "simple", totalSales: 3 });
   assert.deepEqual(mapPushedProduct({ id: 5, name: "x", status: "trash" }), { remove: "5" });
   assert.equal(mapPushedProduct({ id: 0, name: "x" }), null); assert.equal(mapPushedProduct({ id: 3, name: "" }), null); assert.equal(mapPushedProduct("nope"), null);
   const odd = mapPushedProduct({ id: 7, name: "n", price: "", total_sales: -4 });

@@ -183,14 +183,14 @@ export function summarizeFees(fees: FeeEntry[]): { types: FeeTypeRow[]; byCatego
 }
 
 // ---------------- offers ----------------
-export interface OfferInfo { offerId: string; name: string; price: number | null; visits: number | null; watchers: number | null }
+export interface OfferInfo { offerId: string; name: string; price: number | null; visits: number | null; watchers: number | null; /** Units in stock, when Allegro reports it. */ stock: number | null }
 export async function loadAllegroOffers(c: AllegroCtx): Promise<OfferInfo[]> {
   const out: OfferInfo[] = [];
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   for (let page = 0; page < 5; page++) {
     const res = await allegroGet(c, "/sale/offers", { limit: "1000", offset: String(page * 1000), "publication.status": "ACTIVE" });
     const offers: any[] = res?.offers ?? [];
-    for (const o of offers) { const price = Number(o.sellingMode?.price?.amount); out.push({ offerId: String(o.id), name: String(o.name ?? ""), price: price > 0 ? price : null, visits: num(o.stats?.visitsCount), watchers: num(o.stats?.watchersCount) }); }
+    for (const o of offers) { const price = Number(o.sellingMode?.price?.amount); out.push({ offerId: String(o.id), name: String(o.name ?? ""), price: price > 0 ? price : null, visits: num(o.stats?.visitsCount), watchers: num(o.stats?.watchersCount), stock: num(o.stock?.available) }); }
     if (offers.length < 1000) break;
   }
   return out;

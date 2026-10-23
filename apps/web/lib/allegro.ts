@@ -81,7 +81,7 @@ export async function syncAllegro(admin: Admin, conn: { id: string; workspace_id
   for (let i = 0; i < feeRows.length; i += 500) await admin.from("marketplace_fee").upsert(feeRows.slice(i, i + 500), { onConflict: "workspace_id,platform,entry_id" });
 
   const day = new Date().toISOString().slice(0, 10);
-  if (offers.length) await admin.from("offer_stats_snapshots").upsert(offers.map((o) => ({ workspace_id: conn.workspace_id, platform: "allegro", offer_id: o.offerId, day, name: o.name.slice(0, 200), price: o.price, visits: o.visits, watchers: o.watchers })), { onConflict: "workspace_id,platform,offer_id,day" });
+  if (offers.length) await admin.from("offer_stats_snapshots").upsert(offers.map((o) => ({ workspace_id: conn.workspace_id, platform: "allegro", offer_id: o.offerId, day, name: o.name.slice(0, 200), price: o.price, visits: o.visits, watchers: o.watchers, stock: o.stock })), { onConflict: "workspace_id,platform,offer_id,day" });
 
   const stats: AllegroStats = { syncedAt: new Date().toISOString(), days, orders: orders.length, ordersTruncated: truncated, currency, fees: summarizeFees(fees) };
   await admin.from("connection").update({

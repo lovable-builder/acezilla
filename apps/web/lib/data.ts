@@ -90,20 +90,26 @@ export async function loadAdImports(supabase: SupabaseClient, workspaceId: strin
 /** Catalogue and sales for the Products page: WooCommerce products pushed by the plugin, Allegro offers from the latest snapshot, and order lines from both. */
 export async function loadProducts(supabase: SupabaseClient, workspaceId: string, start: string, end: string) {
   const [{ data: woo }, { data: snaps }, { data: lines }, { data: setting }] = await Promise.all([
-    supabase.from("store_product").select("external_id,name,price,status,stock_status").eq("workspace_id", workspaceId).eq("platform", "woocommerce").limit(5000),
-    supabase.from("offer_stats_snapshots").select("offer_id,name,price,day").eq("workspace_id", workspaceId).eq("platform", "allegro").gte("day", shiftDate(todayUtc(), -8)).order("day", { ascending: false }).limit(5000),
+    supabase.from("store_product").select("external_id,name,sku,price,status,stock_status,stock_qty").eq("workspace_id", workspaceId).eq("platform", "woocommerce").limit(5000),
+    supabase.from("offer_stats_snapshots").select("offer_id,name,price,stock,day").eq("workspace_id", workspaceId).eq("platform", "allegro").gte("day", shiftDate(todayUtc(), -8)).order("day", { ascending: false }).limit(5000),
     supabase.from("order_line").select("platform,offer_id,name,qty,unit_price,bought_at").eq("workspace_id", workspaceId).gte("bought_at", `${start}T00:00:00Z`).limit(20000),
     supabase.from("marketplace_setting").select("vat_rate").eq("workspace_id", workspaceId).maybeSingle(),
   ]);
-  const catalog: CatalogItem[] = (woo ?? []).map((p) => ({ channel: "woocommerce", productId: p.external_id as string, name: p.name as string, price: p.price === null ? null : Number(p.price), status: p.status as string, stock: (p.stock_status as string | null) ?? null }));
+  const catalog: CatalogItem[] = (woo ?? []).map((p) => ({ channel: "woocommerce", productId: p.external_id as string, name: p.name as string, price: p.price === null ? null : Number(p.price), status: p.status as string, stock: (p.stock_status as string | null) ?? null, stockQty: (p.stock_qty as number | null) ?? null, sku: (p.sku as string | null) ?? null }));
   const seen = new Set<string>();
   for (const o of snaps ?? []) {
     const id = o.offer_id as string;
     if (seen.has(id) || !o.name) continue;
     seen.add(id);
-    catalog.push({ channel: "allegro", productId: id, name: o.name as string, price: o.price === null ? null : Number(o.price), status: "active", stock: null });
+    catalog.push({ channel: "allegro", productId: id, name: o.name as string, price: o.price === null ? null : Number(o.price), status: "active", stock: null, stockQty: (o.stock as number | null) ?? null });
   }
   const sold: SoldLine[] = (lines ?? []).map((l) => ({ channel: l.platform as string, productId: l.offer_id as string, name: (l.name as string | null) ?? null, qty: l.qty as number, unitPrice: Number(l.unit_price), at: l.bought_at as string }));
   const rows = buildProductList({ catalog, lines: sold, from: start, to: end, vat: { allegro: Number(setting?.vat_rate ?? 0) } });
   return { rows, wooCatalogSize: woo?.length ?? 0 };
+}
+
+/** Campaigns a person has linked to a product. */
+export async function loadCampaignLinks(supabase: SupabaseClient, workspaceId: string) {
+  const { data } = await supabase.from("campaign_product").select("campaign_id,product_channel,product_id").eq("workspace_id", workspaceId).limit(2000);
+  return new Map((data ?? []).map((r) => [r.campaign_id as string, { channel: r.product_channel as string, productId: r.product_id as string }]));
 }

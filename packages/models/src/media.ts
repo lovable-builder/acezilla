@@ -102,6 +102,41 @@ export function launchChecklist(platform: MediaPlatform, format: string, goal: s
   return [...(s.requirements.all ?? []), ...(s.requirements[format] ?? [])].filter((r) => !/Pixel/.test(r) || (!!needs && r.includes(needs)));
 }
 
+// ---------------- stock and the product a campaign sells ----------------
+
+export type StockLevel = "out" | "low" | "ok" | "unknown";
+/** From 1 to this many units counts as low stock. */
+export const LOW_STOCK_MAX = 5;
+/** Out, low, fine or not known. A quantity wins when the store reports one; otherwise the store's own in-stock flag. */
+export function stockLevel(s: { qty: number | null | undefined; status?: string | null }): StockLevel {
+  if (s.status === "outofstock") return "out";
+  if (typeof s.qty === "number") return s.qty <= 0 ? "out" : s.qty <= LOW_STOCK_MAX ? "low" : "ok";
+  return s.status === "instock" || s.status === "onbackorder" ? "ok" : "unknown";
+}
+
+export interface ProductRef { channel: string; productId: string; name: string; sku?: string | null }
+const STOP = new Set(["the", "and", "for", "with", "dla", "oraz", "test", "set", "szt", "pcs", "new", "nowy", "nowa", "sale", "campaign", "kampania", "ads", "ad", "group", "grupa"]);
+const words = (s: string) => new Set(s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/gi, "l").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !STOP.has(w)));
+
+/**
+ * Guesses which product a campaign sells from its name. Strict on purpose: at least two thirds of the campaign's meaningful
+ * words must appear in one product's name, and no other product may match as well. A shop or brand name that is in every
+ * product therefore never produces a match. A person's own link always wins over this.
+ */
+export function matchProduct(campaignName: string, products: ProductRef[]): ProductRef | null {
+  const cw = words(campaignName);
+  if (cw.size === 0) return null;
+  const scored = products.map((p) => {
+    if (p.sku && p.sku.length >= 3 && campaignName.toLowerCase().includes(p.sku.toLowerCase())) return { p, score: 1.01 };
+    const pw = words(p.name);
+    let hit = 0; for (const w of cw) if (pw.has(w)) hit++;
+    return { p, score: hit / cw.size };
+  }).filter((x) => x.score >= 0.66).sort((a, b) => b.score - a.score);
+  if (scored.length === 0) return null;
+  if (scored.length > 1 && scored[1]!.score >= scored[0]!.score) return null;
+  return scored[0]!.p;
+}
+
 // ---------------- what to do with a running campaign ----------------
 
 export type AdviceKind = "stop" | "scale" | "watch" | "too_early" | "restore" | "paused";
@@ -116,24 +151,26 @@ export const minSpendToJudge = (currency: string) => roundUp(MIN_SPEND_TO_JUDGE_
  * The advice for one campaign over the period: stop what loses money, wait on what has not spent enough, scale what clearly
  * earns, and offer to bring back a paused campaign that used to earn. The numbers are the platform's own, so treat ROAS as a signal.
  */
-export function adviseCampaign(c: { status: string; spend: number; roas: number | null }, o: { currency: string; minSpend?: number }): Advice {
+export function adviseCampaign(c: { status: string; spend: number; roas: number | null; stock?: StockLevel }, o: { currency: string; minSpend?: number }): Advice {
   const min = o.minSpend ?? minSpendToJudge(o.currency);
   const active = c.status.toLowerCase() === "active";
   const enough = c.spend >= min;
   const roas = c.roas ?? 0;
   if (!active) {
-    return enough && roas >= ROAS_SCALE
+    return enough && roas >= ROAS_SCALE && c.stock !== "out" && c.stock !== "low"
       ? { kind: "restore", label: "Bring back?", reason: `It is paused, but it earned ${roas.toFixed(1)}x on ${Math.round(c.spend)} spent.` }
       : { kind: "paused", label: "Paused", reason: "Paused, and nothing suggests restarting it." };
   }
+  if (c.stock === "out") return { kind: "stop", label: "Stop", reason: "Its product is out of stock, so the ad would send shoppers to something they cannot buy. Pause it until you restock." };
   if (!enough) return { kind: "too_early", label: "Too early", reason: `Only ${Math.round(c.spend)} spent so far. Give it more before deciding.` };
   if (roas < ROAS_LOSING) return { kind: "stop", label: "Stop", reason: `It returns ${roas.toFixed(1)}x, so it loses money on what the platform reports.` };
+  if (roas >= ROAS_SCALE && c.stock === "low") return { kind: "watch", label: "Watch", reason: `It returns ${roas.toFixed(1)}x, but only a few units are left. Restock before you raise the budget.` };
   if (roas >= ROAS_SCALE) return { kind: "scale", label: `Scale +${SCALE_STEP * 100}%`, reason: `It returns ${roas.toFixed(1)}x. Raise the daily budget by about ${SCALE_STEP * 100}% and watch it.` };
   return { kind: "watch", label: "Watch", reason: `It returns ${roas.toFixed(1)}x. Not clearly losing, not clearly winning.` };
 }
 
 /** The campaigns that need a person today, biggest spenders first. Campaigns to watch or wait on are left out. */
-export function todaysDecisions<T extends { name: string; status: string; spend: number; roas: number | null }>(cs: T[], o: { currency: string; limit?: number }): { campaign: T; advice: Advice }[] {
+export function todaysDecisions<T extends { name: string; status: string; spend: number; roas: number | null; stock?: StockLevel }>(cs: T[], o: { currency: string; limit?: number }): { campaign: T; advice: Advice }[] {
   return cs.map((campaign) => ({ campaign, advice: adviseCampaign(campaign, o) }))
     .filter((x) => x.advice.kind === "stop" || x.advice.kind === "scale" || x.advice.kind === "restore")
     .sort((a, b) => b.campaign.spend - a.campaign.spend).slice(0, o.limit ?? 8);

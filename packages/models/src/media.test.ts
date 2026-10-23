@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adviseCampaign, budgetGuide, launchChecklist, MEDIA_SPECS, minSpendToJudge, roasTone, todaysDecisions } from "./media";
+import { adviseCampaign, budgetGuide, launchChecklist, matchProduct, MEDIA_SPECS, minSpendToJudge, roasTone, stockLevel, todaysDecisions } from "./media";
 
 const C = { currency: "PLN" };
 
@@ -49,4 +49,35 @@ test("today's decisions list only campaigns that need a person, biggest spend fi
 
 test("roas tones follow the 2x and 1x lines", () => {
   assert.deepEqual([roasTone(2.4), roasTone(1.2), roasTone(0.4), roasTone(null)], ["good", "ok", "bad", "none"]);
+});
+
+test("stock level: a quantity wins, then the store's flag, 1 to 5 is low", () => {
+  assert.deepEqual([stockLevel({ qty: 0 }), stockLevel({ qty: 3 }), stockLevel({ qty: 5 }), stockLevel({ qty: 6 })], ["out", "low", "low", "ok"]);
+  assert.deepEqual([stockLevel({ qty: null, status: "outofstock" }), stockLevel({ qty: null, status: "instock" }), stockLevel({ qty: null }), stockLevel({ qty: 40, status: "outofstock" })], ["out", "ok", "unknown", "out"]);
+});
+
+test("stock changes the advice: out of stock stops a winner, low stock holds back scaling, a paused winner is not restored without stock", () => {
+  const min = minSpendToJudge("PLN");
+  assert.equal(adviseCampaign({ status: "active", spend: min * 2, roas: 3, stock: "out" }, C).kind, "stop");
+  assert.equal(adviseCampaign({ status: "active", spend: 1, roas: 0, stock: "out" }, C).kind, "stop", "even before it has spent enough");
+  const low = adviseCampaign({ status: "active", spend: min * 2, roas: 3, stock: "low" }, C);
+  assert.equal(low.kind, "watch"); assert.match(low.reason, /Restock/);
+  assert.equal(adviseCampaign({ status: "active", spend: min * 2, roas: 3, stock: "ok" }, C).kind, "scale");
+  assert.equal(adviseCampaign({ status: "paused", spend: min * 2, roas: 3, stock: "out" }, C).kind, "paused");
+  assert.equal(adviseCampaign({ status: "paused", spend: min * 2, roas: 3, stock: "ok" }, C).kind, "restore");
+});
+
+test("matching a campaign to a product is strict: clear names match, brand-only and ambiguous names do not", () => {
+  const P = [
+    { channel: "allegro", productId: "1", name: "Gniotek piankowy antystresowy pierożek brokatowy 10 cm" },
+    { channel: "allegro", productId: "2", name: "Lampka nocna LED RGB z ładowarką indukcyjną Qi RIMFYA" },
+    { channel: "allegro", productId: "3", name: "RIMFYA LAMPKA LED NA MONITOR KOMPUTER BIURKO REGULOWANA" },
+    { channel: "woocommerce", productId: "9", name: "Ramka LED RGB do TV", sku: "RAM-40" },
+  ];
+  assert.equal(matchProduct("Gniotek pierożek - autumn", P)?.productId, "1");
+  assert.equal(matchProduct("RIMFYA LED - Test 1", P), null, "a brand in several names is not a match");
+  assert.equal(matchProduct("Lampka LED", P), null, "two lamps match equally");
+  assert.equal(matchProduct("Promo RAM-40 october", P)?.productId, "9", "a SKU in the name is a sure match");
+  assert.equal(matchProduct("kids", P), null);
+  assert.equal(matchProduct("", P), null);
 });

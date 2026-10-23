@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { adviseCampaign, roasTone, todaysDecisions, buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StoreSales } from "@acezilla/models";
+import { adviseCampaign, roasTone, todaysDecisions, buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StockLevel, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { parsePeriod, parseSavedView } from "@/lib/period";
-import { loadProducts, loadVatRate, netAdRows, netOfVat } from "@/lib/data";
+import { loadCampaignLinks, loadProducts, loadVatRate, netAdRows, netOfVat } from "@/lib/data";
+import { resolveCampaignProducts } from "@/lib/campaign-products";
+import { linkCampaignProduct } from "./link-actions";
 import { Term } from "@/components/app/term";
 import { Checklist } from "@/components/app/checklist";
 import { ClaimedVsReal, CountUp, RoasGauge, SpendDonut } from "@/components/dash/gadgets";
@@ -58,7 +60,7 @@ function ProductsOverview({ rows, cur, stores }: { rows: ProductRow[]; cur: stri
 const ADVICE_CHIP: Record<string, string> = { stop: "missing", scale: "good", restore: "good", watch: "attention", too_early: "not_measured", paused: "not_measured" };
 
 /** The campaigns that need a person today. Suggestions only: acezilla never changes a live campaign. */
-function Decisions({ campaigns, cur }: { campaigns: { campaignId: string; name: string; platform: string; status: string; spend: number; roas: number | null }[]; cur: string }) {
+function Decisions({ campaigns, cur }: { campaigns: { campaignId: string; name: string; platform: string; status: string; spend: number; roas: number | null; stock?: StockLevel; productName?: string }[]; cur: string }) {
   const list = todaysDecisions(campaigns.filter((c) => c.platform !== "allegro").map((c) => ({ ...c })), { currency: cur });
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -72,7 +74,7 @@ function Decisions({ campaigns, cur }: { campaigns: { campaignId: string; name: 
             <li key={c.campaignId} className="rise" style={{ "--i": i, display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" } as React.CSSProperties}>
               <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`} style={{ flexShrink: 0 }}>{a.label}</span>
               <div style={{ flex: 1, minWidth: 220 }}>
-                <b style={{ fontWeight: 600 }}>{c.name}</b> <span className="eyebrow">{PLATFORM[c.platform]?.label ?? c.platform} · {money(c.spend, cur)} spent</span>
+                <b style={{ fontWeight: 600 }}>{c.name}</b> <span className="eyebrow">{PLATFORM[c.platform]?.label ?? c.platform} · {money(c.spend, cur)} spent{c.productName ? ` · sells ${c.productName.slice(0, 50)}` : ""}</span>
                 <div className="sub" style={{ margin: 0, fontSize: 13 }}>{a.reason}</div>
               </div>
             </li>
@@ -305,6 +307,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const { data: summaryRow } = await supabase.from("ai_summary").select("day,content").eq("workspace_id", current.id).eq("kind", "weekly").order("day", { ascending: false }).limit(1).maybeSingle();
   const summary = summaryRow && Date.now() - new Date(`${summaryRow.day}T00:00:00Z`).getTime() < 8 * 86400000 ? (summaryRow.content as { headline?: string; highlights?: string[]; watch?: string[]; nextSteps?: string[]; unverified?: string[]; error?: string }) : null;
   const prodRows = await productsFor(d.endDate, d.windowDays);
+  const campaignLinks = connectedStores.length ? await loadCampaignLinks(supabase, current.id) : new Map<string, { channel: string; productId: string }>();
+  const cp = resolveCampaignProducts(d.campaigns.map((c) => ({ campaignId: c.campaignId, name: c.name, platform: c.platform })), prodRows, campaignLinks);
   const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] });
 
   return (
@@ -360,7 +364,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         {!summary && <div className="sub" style={{ margin: 0 }}>A short, plain-language summary of the last 7 days written from your numbers. It is written when you ask, so opening this page never costs anything.</div>}
       </Card>
 
-      <Decisions campaigns={d.campaigns} cur={cur} />
+      <Decisions campaigns={d.campaigns.map((c) => ({ ...c, stock: cp.get(c.campaignId)?.stock, productName: cp.get(c.campaignId)?.product.name }))} cur={cur} />
 
       <Card>
         <h2 className="h2"><span className="n">··</span>Insights</h2>
@@ -433,7 +437,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <Card style={{ overflowX: "auto" }}>
         <h2 className="h2"><span className="n">04</span>Campaigns</h2>
         <table className="t tabnum">
-          <thead><tr><th>Campaign</th><th>Spend</th><th><Term>Platform ROAS</Term></th><th><Term>Modeled ROAS</Term></th><th><Term>CPA</Term></th><th>Status</th><th style={{ textAlign: "left" }}>What to do</th></tr></thead>
+          <thead><tr><th>Campaign</th><th>Spend</th><th><Term>Platform ROAS</Term></th><th><Term>Modeled ROAS</Term></th><th><Term>CPA</Term></th><th>Status</th>{connectedStores.length > 0 && <th style={{ textAlign: "left" }}>Product</th>}<th style={{ textAlign: "left" }}>What to do</th></tr></thead>
           <tbody>
             {d.campaigns.map((c) => (
               <tr key={c.campaignId}>
@@ -443,7 +447,30 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
                 {(() => { const m = attr.campaigns.get(c.campaignId); return <td style={{ fontWeight: 600 }} title={m ? `${m.orders} store orders tagged with this campaign` : "No store orders are tagged with this campaign's name (utm_campaign)"}>{m?.modeledRoas == null ? "—" : x(m.modeledRoas)}</td>; })()}
                 <td>{c.cpa === null ? "—" : money(c.cpa, cur)}</td>
                 <td style={{ color: c.status === "active" ? "var(--pos)" : "var(--ink3)" }}>{c.status}</td>
-                {(() => { const a = c.platform === "allegro" ? null : adviseCampaign(c, { currency: cur }); return <td style={{ textAlign: "left" }} title={a?.reason}>{a ? <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`}>{a.label}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>}</td>; })()}
+                {connectedStores.length > 0 && (() => {
+                  const link = cp.get(c.campaignId); const listed = prodRows.filter((p) => p.listed);
+                  const chip = link ? ({ out: ["missing", "Out of stock"], low: ["attention", "Low stock"], ok: ["good", "In stock"], unknown: ["not_measured", "Stock unknown"] } as const)[link.stock] : null;
+                  return (
+                    <td style={{ textAlign: "left", maxWidth: 260 }}>
+                      {c.platform === "allegro" ? <span className="sub" style={{ fontSize: 12 }}>Many offers</span> : (
+                        <details>
+                          <summary style={{ cursor: "pointer", listStyle: "none" }}>
+                            {link ? <><span style={{ overflowWrap: "anywhere" }}>{link.product.name.slice(0, 44)}</span> {chip && <span className={`seo-chip seo-chip-${chip[0]}`}>{chip[1]}</span>} <span className="eyebrow">{link.source === "auto" ? "suggested" : "linked"}</span></> : <span className="eyebrow" style={{ color: "var(--accent-ink)" }}>Link a product</span>}
+                          </summary>
+                          <form action={linkCampaignProduct} style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                            <input type="hidden" name="campaignId" value={c.campaignId} />
+                            <select name="product" className="field" defaultValue={link ? `${link.product.channel}|${link.product.productId}` : ""} style={{ padding: "4px 8px", maxWidth: 220 }} aria-label="Product this campaign sells">
+                              <option value="">No product</option>
+                              {listed.slice(0, 300).map((p) => <option key={`${p.channel}|${p.productId}`} value={`${p.channel}|${p.productId}`}>{p.name.slice(0, 60)}</option>)}
+                            </select>
+                            <Button size="sm" variant="outline">Save</Button>
+                          </form>
+                        </details>
+                      )}
+                    </td>
+                  );
+                })()}
+                {(() => { const a = c.platform === "allegro" ? null : adviseCampaign({ ...c, stock: cp.get(c.campaignId)?.stock }, { currency: cur }); return <td style={{ textAlign: "left" }} title={a?.reason}>{a ? <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`}>{a.label}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>}</td>; })()}
               </tr>
             ))}
           </tbody>
