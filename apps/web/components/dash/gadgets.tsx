@@ -110,7 +110,7 @@ export function SpendDonut({ parts, total, cur }: { parts: { label: string; valu
 }
 
 /** Two bars: the revenue the ad platforms claim against the revenue the store recorded. */
-export function ClaimedVsReal({ claimed, real, cur }: { claimed: number; real: number; cur: string }) {
+export function ClaimedVsReal({ claimed, real, cur, aLabel = "Ad platforms say", bLabel = "Your store recorded", note }: { claimed: number; real: number; cur: string; aLabel?: string; bLabel?: string; note?: string }) {
   const mounted = useMounted();
   const max = Math.max(claimed, real, 1);
   const bar = (label: string, v: number, color: string, delay: number) => (
@@ -123,14 +123,14 @@ export function ClaimedVsReal({ claimed, real, cur }: { claimed: number; real: n
       </div>
     </div>
   );
-  const note = claimed > real
+  const text = note ?? (claimed > real
     ? "The ad platforms claim more than your whole store sold. They are counting the same sales more than once."
-    : `Ads are credited with about ${Math.round((claimed / Math.max(real, 1)) * 100)}% of what the store recorded. The rest came from other sources.`;
+    : `Ads are credited with about ${Math.round((claimed / Math.max(real, 1)) * 100)}% of what the store recorded. The rest came from other sources.`);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {bar("Ad platforms say", claimed, "var(--ink3)", 0)}
-      {bar("Your store recorded", real, "var(--accent)", 200)}
-      <p className="sub" style={{ margin: 0, fontSize: 13 }}>{note}</p>
+      {bar(aLabel, claimed, "var(--ink3)", 0)}
+      {bar(bLabel, real, "var(--accent)", 200)}
+      <p className="sub" style={{ margin: 0, fontSize: 13 }}>{text}</p>
     </div>
   );
 }

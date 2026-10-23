@@ -205,6 +205,9 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const vat = await loadVatRate(supabase, current.id);
   orderRows.splice(0, orderRows.length, ...netOfVat(orderRows, vat));
   rows.splice(0, rows.length, ...netAdRows(rows, vat));
+  // The previous period is only a fair comparison when we have data that far back. Orders and ads are imported for a limited time.
+  const firstData = [...orderRows.map((o) => o.createdAt.slice(0, 10)), ...rows.map((r) => r.date)].reduce<string | null>((m, x) => (m === null || x < m ? x : m), null);
+  const hasHistory = (end: string, days: number) => firstData !== null && firstData <= shiftDate(end, -(2 * days - 1));
   const { data: allConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id);
   const storeConns = (allConns ?? []).filter((c) => ["woocommerce", "allegro", "shopify"].includes(c.platform as string));
   const connectedStores = storeConns.map((c) => c.platform as string);
@@ -252,7 +255,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         <Sources ads={[]} stores={storeNames} />
         {checklist}
         {warningCard}
-        <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: store0.windowDays, endDate: store0.endDate })} compare={compare} store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
+        <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: store0.windowDays, endDate: store0.endDate })} compare={compare && hasHistory(store0.endDate, store0.windowDays)} store={store0} cur={cur0} spendByDate={null} adSpend={null} platformRoas={null} />
         <ProductsOverview rows={prod0} cur={cur0} stores={connectedStores} />
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ flex: 1, minWidth: 220 }}><b>Next: connect an ad platform.</b> Your store is connected, so this page already shows real sales. Add Meta or Google Ads to see what your ad spend returns.</span>
@@ -293,7 +296,12 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const store = orderRows.length > 0 ? buildStoreSales(orderRows, { endDate: d.endDate, windowDays: d.windowDays }) : null;
   const spendByDate = new Map(d.series.map((p) => [p.date, p.spend]));
   const roasUp = k.roas.deltaPct !== null && k.roas.deltaPct >= 0;
-  const cells = [
+  const hasPrev = hasHistory(d.endDate, d.windowDays);
+  const cmp = compare && hasPrev;
+  // Allegro does not report revenue per ad, so with only Allegro the "platform" revenue and ROAS are nothing, not zero.
+  const reporting = d.platforms.some((p) => p.platform !== "allegro");
+  const storeRoasNow = store && k.spend.value > 0 ? storeRoas(store.revenue.value, k.spend.value) : null;
+  const allCells = [
     { label: "Spend", v: money(k.spend.value, cur), raw: k.spend.value, kind: "money" as const, d: k.spend.deltaPct, good: null, s: k.spend.series },
     { label: "Revenue", v: money(k.revenue.value, cur), raw: k.revenue.value, kind: "money" as const, d: k.revenue.deltaPct, good: true, s: k.revenue.series },
     { label: "Blended ROAS", v: x(k.roas.value), raw: k.roas.value, kind: "x" as const, d: k.roas.deltaPct, good: true, s: k.roas.series },
@@ -301,6 +309,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     { label: "Conversions", v: int(k.conversions.value), raw: k.conversions.value, kind: "int" as const, d: k.conversions.deltaPct, good: true, s: k.conversions.series },
   ];
 
+  const cells = reporting ? allCells : allCells.slice(0, 1);
   const winStart = shiftDate(d.endDate, -(d.windowDays - 1));
   const inWindow = orderRows.filter((x) => x.createdAt.slice(0, 10) >= winStart && x.createdAt.slice(0, 10) <= d.endDate);
   const attr = buildAttribution({ platforms: d.platforms, campaigns: d.campaigns, orders: inWindow, nonReporting: ["allegro"] });
@@ -309,7 +318,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const prodRows = await productsFor(d.endDate, d.windowDays);
   const campaignLinks = connectedStores.length ? await loadCampaignLinks(supabase, current.id) : new Map<string, { channel: string; productId: string }>();
   const cp = resolveCampaignProducts(d.campaigns.map((c) => ({ campaignId: c.campaignId, name: c.name, platform: c.platform })), prodRows, campaignLinks);
-  const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] });
+  // Insights that compare with the previous period are left out when there is no history that far back.
+  const insights = buildInsights(d, store, { money: (n) => money(n, cur), nonReporting: ["allegro"] }).filter((i) => hasPrev || !["store-revenue", "spend-up-sales-flat", "aov"].includes(i.id));
 
   return (
     <>
@@ -317,21 +327,24 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <div>
         <div className="eyebrow">Overview · last {d.windowDays} days to {d.endDate}</div>
         <h1 className="page">
-          You spent {money(k.spend.value, cur)} and made {money(k.revenue.value, cur)}
-          {k.roas.deltaPct === null || !compare
-            ? ` — blended ROAS is ${x(k.roas.value)}.`
-            : ` — ROAS is ${roasUp ? "up" : "down"} ${delta(k.roas.deltaPct).replace(/^[+−]/, "")} on the previous period.`}
+          {!reporting
+            ? <>You spent {money(k.spend.value, cur)} on ads{store ? <> and your store made {money(store.revenue.value, cur)}{storeRoasNow !== null ? ` — ${x(storeRoasNow)} back for every 1 spent.` : "."}</> : "."}</>
+            : <>You spent {money(k.spend.value, cur)} and made {money(k.revenue.value, cur)}
+              {k.roas.deltaPct === null || !cmp
+                ? ` — blended ROAS is ${x(k.roas.value)}.`
+                : ` — ROAS is ${roasUp ? "up" : "down"} ${delta(k.roas.deltaPct).replace(/^[+−]/, "")} on the previous period.`}</>}
         </h1>
-        <p className="sub">{store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
+        <p className="sub">{!reporting ? "Allegro does not report revenue per ad, so your ads are judged against your real store sales." : store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
+        {compare && !hasPrev && firstData && <p className="sub" style={{ fontSize: 13 }}>Changes against the previous period are hidden: your data starts on {firstData}, so the previous period is incomplete. Choose a shorter period to compare.</p>}
       </div>
-      <Sources ads={d.platforms.filter((p) => p.platform !== "allegro").map((p) => PLATFORM[p.platform]?.label ?? p.platform)} stores={storeNames} />
+      <Sources ads={d.platforms.map((p) => (p.platform === "allegro" ? "Allegro Ads" : PLATFORM[p.platform]?.label ?? p.platform))} stores={storeNames} />
       {checklist}
       {warningCard}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
         <div className="gadget rise" style={{ "--i": 0 } as React.CSSProperties}>
           <h2 className="h2" style={{ margin: 0 }}><Term k="Store ROAS">Return on ad spend</Term></h2>
-          <RoasGauge real={store && k.spend.value > 0 ? storeRoas(store.revenue.value, k.spend.value) : null} claimed={k.roas.value} />
+          <RoasGauge real={storeRoasNow} claimed={reporting ? k.roas.value : null} />
         </div>
         <div className="gadget rise" style={{ "--i": 1 } as React.CSSProperties}>
           <h2 className="h2" style={{ margin: 0 }}>Where the money goes</h2>
@@ -339,8 +352,10 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         </div>
         {store && (
           <div className="gadget rise" style={{ "--i": 2 } as React.CSSProperties}>
-            <h2 className="h2" style={{ margin: 0 }}>Claimed vs real sales</h2>
-            <ClaimedVsReal claimed={k.revenue.value} real={store.revenue.value} cur={cur} />
+            <h2 className="h2" style={{ margin: 0 }}>{reporting ? "Claimed vs real sales" : "Ad cost vs store sales"}</h2>
+            {reporting
+              ? <ClaimedVsReal claimed={k.revenue.value} real={store.revenue.value} cur={cur} />
+              : <ClaimedVsReal claimed={k.spend.value} real={store.revenue.value} cur={cur} aLabel="Ad spend" bLabel="Store sales" note={store.revenue.value > 0 ? `Ads cost ${((k.spend.value / store.revenue.value) * 100).toFixed(0)}% of store sales. That share is your ACoS.` : "No store sales in this period."} />}
           </div>
         )}
       </div>
@@ -380,19 +395,19 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         )}
       </Card>
 
-      <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Ad performance <span className="eyebrow" style={{ marginLeft: 8 }}>As reported by the ad platforms</span></h2>
+      <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Ad performance <span className="eyebrow" style={{ marginLeft: 8 }}>{reporting ? "As reported by the ad platforms" : "Allegro does not report revenue per ad"}</span></h2>
       <div className="kpis">
         {cells.map((c, i) => (
           <div className="kpi rise" style={{ "--i": i } as React.CSSProperties} key={c.label}>
             <span className="eyebrow"><Term>{c.label}</Term></span>
             <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.raw === null ? c.v : <CountUp value={c.raw} kind={c.kind} cur={cur} />}</span>
-            <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{compare ? delta(c.d) : " "}</span>
+            <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{cmp ? delta(c.d) : " "}</span>
             <Sparkline data={c.s} color={c.good === null ? "var(--ink3)" : "var(--accent)"} />
           </div>
         ))}
       </div>
 
-      {store ? <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={k.roas.value} compare={compare} /> : connectedStores.length > 0 && <ChannelsCard cur={cur} channels={buildChannels([], { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} />}
+      {store ? <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={reporting ? k.roas.value : null} compare={cmp} /> : connectedStores.length > 0 && <ChannelsCard cur={cur} channels={buildChannels([], { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} />}
       <ProductsOverview rows={prodRows} cur={cur} stores={connectedStores} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
@@ -428,7 +443,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
                 <b style={{ fontWeight: 600 }}>{PLATFORM[p.platform]?.label ?? p.platform}</b>
               </div>
               <div className="tabnum" style={{ fontSize: 20, fontWeight: 600, marginTop: 6 }}>{money(p.spend, cur)}</div>
-              <div className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{x(p.roas)} platform · {compact(p.revenue)} rev</div>
+              <div className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{p.platform === "allegro" ? "revenue per ad not reported" : `${x(p.roas)} platform · ${compact(p.revenue)} rev`}</div>
             </div>
           ))}
         </div>
@@ -443,7 +458,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
               <tr key={c.campaignId}>
                 <td><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 8, background: PLATFORM[c.platform]?.color }} />{c.name}</td>
                 <td>{money(c.spend, cur)}</td>
-                <td style={{ color: ({ good: "var(--pos)", ok: "var(--warn)", bad: "var(--neg)", none: "var(--ink3)" } as const)[roasTone(c.roas)], fontWeight: 600 }} title="Green from 2x, amber from 1x, red below 1x">{x(c.roas)}</td>
+                <td style={{ color: ({ good: "var(--pos)", ok: "var(--warn)", bad: "var(--neg)", none: "var(--ink3)" } as const)[roasTone(c.roas)], fontWeight: 600 }} title="Green from 2x, amber from 1x, red below 1x">{c.platform === "allegro" ? <span className="sub" style={{ fontSize: 12, fontWeight: 400 }}>not reported</span> : x(c.roas)}</td>
                 {(() => { const m = attr.campaigns.get(c.campaignId); return <td style={{ fontWeight: 600 }} title={m ? `${m.orders} store orders tagged with this campaign` : "No store orders are tagged with this campaign's name (utm_campaign)"}>{m?.modeledRoas == null ? "—" : x(m.modeledRoas)}</td>; })()}
                 <td>{c.cpa === null ? "—" : money(c.cpa, cur)}</td>
                 <td style={{ color: c.status === "active" ? "var(--pos)" : "var(--ink3)" }}>{c.status}</td>
