@@ -32,7 +32,7 @@ export function PricingAdvisor({ models, currency, period }: { models: PricingMo
   const curve = useMemo(() => sweep(m, { from: PRICE_MIN / 100, to: PRICE_MAX / 100, steps: 100, unitCost: cost, elasticity }), [m, cost, elasticity]);
 
   // chart
-  const W = 640, H = 230, pad = { l: 56, r: 14, t: 14, b: 30 };
+  const W = 920, H = 260, pad = { l: 56, r: 14, t: 14, b: 30 };
   const ys = curve.map((c) => c.profit), lo = Math.min(...ys, 0), hi = Math.max(...ys, 0), span = hi - lo || 1;
   const X = (pct: number) => pad.l + ((pct - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * (W - pad.l - pad.r);
   const Y = (v: number) => pad.t + (1 - (v - lo) / span) * (H - pad.t - pad.b);
