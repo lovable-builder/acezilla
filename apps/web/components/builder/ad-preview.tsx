@@ -10,6 +10,8 @@ export interface PreviewProps {
   placement?: string;
   /** Shade the parts of a full-screen placement that the app's own buttons cover. */
   safeZones?: boolean;
+  /** "contain" shows the whole picture at its own shape with empty space around it; "cover" fills the frame and crops. */
+  fit?: "contain" | "cover";
 }
 
 const Count = ({ n, max }: { n: number; max: number }) => max > 0 ? <span className="mono tabnum" style={{ fontSize: 11, color: n > max ? "var(--neg)" : "var(--ink3)" }}>{n}/{max}</span> : null;
@@ -110,7 +112,7 @@ export function AdPreview(props: PreviewProps) {
   }
 
   return (
-    <div className={`ap${pl.fullScreen ? " ap-bare" : ""}`} aria-label={`${pl.label} preview`}>
+    <div className={`ap${pl.fullScreen ? " ap-bare" : ""}${props.fit === "cover" ? " fit-cover" : ""}`} aria-label={`${pl.label} preview`}>
       {body}
       {note && <div className="ap-fit" style={{ color: note.fits ? "var(--pos)" : "var(--warn)" }}>{note.fits ? "✓" : "!"} {note.text}</div>}
       <div className="ap-foot">{foot}</div>

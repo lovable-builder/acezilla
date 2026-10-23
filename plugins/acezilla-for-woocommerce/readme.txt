@@ -2,7 +2,7 @@
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 
 Sends each WooCommerce order's value, date and marketing source to acezilla so it can measure real return on ad spend.
@@ -16,6 +16,9 @@ Install the plugin, create a connection code in acezilla, paste it under the ace
 * Light: orders are sent in the background after checkout, with automatic retries.
 
 == Changelog ==
+= 1.4.0 =
+* Sends all of a product's photos (main and gallery), so you can choose which one to use in a campaign draft. Only addresses are sent.
+
 = 1.3.0 =
 * Sends each product's main image address, so acezilla can show your product photos next to your products and in the campaign builder. Only the address is sent, never the file.
 

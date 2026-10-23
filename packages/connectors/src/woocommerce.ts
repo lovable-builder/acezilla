@@ -60,7 +60,7 @@ export function verifyWooSignature(o: { secret: string; timestamp: string | null
 // ---- what the plugin sends ----
 export interface WooInfo { currency: string | null; siteName: string | null; pluginVersion: string | null; wooVersion: string | null; wpVersion: string | null; attribution: boolean | null }
 /** A product in the store's catalogue. Variations are not sent; only the parent product. */
-export interface WooProduct { externalId: string; name: string; sku: string | null; price: number | null; status: string; stockStatus: string | null; /** Units in stock when the store manages stock, otherwise null. */ stockQty: number | null; productType: string | null; totalSales: number; imageUrl: string | null }
+export interface WooProduct { externalId: string; name: string; sku: string | null; price: number | null; status: string; stockStatus: string | null; /** Units in stock when the store manages stock, otherwise null. */ stockQty: number | null; productType: string | null; totalSales: number; imageUrl: string | null; /** Every photo of the product, main first. */ images: string[] }
 /** One line of a counted order: which product, how many, and what the customer paid for it before tax. */
 export interface WooLine { lineKey: string; orderExternalId: string; productId: string; name: string | null; qty: number; unitPrice: number }
 export type WooPush =
@@ -78,6 +78,13 @@ const pick = (o: unknown, keys: string[]) => {
   return out;
 };
 
+const allImages = (p: Record<string, unknown>): string[] => {
+  const list = Array.isArray(p.images) ? p.images : [];
+  const urls = [p.image, ...list].map(safeImageUrl).filter((u): u is string => !!u);
+  return [...new Set(urls)].slice(0, 10);
+};
+const mainImage = (p: Record<string, unknown>) => allImages(p)[0] ?? null;
+
 /** One product from the plugin, or null if it is not shaped like one. A product in the trash is reported for removal. */
 export function mapPushedProduct(raw: unknown): { keep: WooProduct } | { remove: string } | null {
   const p = raw as Record<string, unknown> | null;
@@ -88,7 +95,7 @@ export function mapPushedProduct(raw: unknown): { keep: WooProduct } | { remove:
   const name = str(p.name, 200);
   if (!name) return null;
   const price = typeof p.price === "number" || (typeof p.price === "string" && p.price.trim() !== "") ? num(p.price) : null;
-  return { keep: { externalId, name, sku: str(p.sku, 60), price: price !== null && price >= 0 && price < 1e9 ? round2(price) : null, status, stockStatus: str(p.stock_status, 20), stockQty: typeof p.stock_quantity === "number" && Number.isFinite(p.stock_quantity) ? Math.max(0, Math.min(1e9, Math.round(p.stock_quantity))) : null, productType: str(p.type, 20), imageUrl: safeImageUrl(p.image), totalSales: Math.max(0, Math.min(1e9, Math.round(num(p.total_sales)))) } };
+  return { keep: { externalId, name, sku: str(p.sku, 60), price: price !== null && price >= 0 && price < 1e9 ? round2(price) : null, status, stockStatus: str(p.stock_status, 20), stockQty: typeof p.stock_quantity === "number" && Number.isFinite(p.stock_quantity) ? Math.max(0, Math.min(1e9, Math.round(p.stock_quantity))) : null, productType: str(p.type, 20), imageUrl: mainImage(p), images: allImages(p), totalSales: Math.max(0, Math.min(1e9, Math.round(num(p.total_sales)))) } };
 }
 
 /** The order lines the plugin sends with an order, cleaned. Bad lines are dropped, never trusted. */

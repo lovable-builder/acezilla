@@ -11,6 +11,7 @@ export function PreviewSwitcher({ platform, format, items, columns = 1, label }:
   const options = placementsFor(platform, format);
   const [chosen, setChosen] = useState(options[0]!.id);
   const [safe, setSafe] = useState(false);
+  const [fill, setFill] = useState(false);
   // Changing platform or format changes the options: fall back to the first one that still exists.
   const placement = options.some((o) => o.id === chosen) ? chosen : options[0]!.id;
   const current = PLACEMENTS.find((p) => p.id === placement)!;
@@ -25,6 +26,11 @@ export function PreviewSwitcher({ platform, format, items, columns = 1, label }:
           </div>
         )}
         <span className="mono tabnum" style={{ fontSize: 11, color: "var(--ink3)" }}>{current.ratioLabel}</span>
+        {current.ratio > 0 && (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }} title="Off: the whole picture at its own shape, with empty space. On: filled and cropped, the way platforms often show it.">
+            <input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} /> Fill and crop
+          </label>
+        )}
         {current.fullScreen && (
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", marginLeft: "auto" }}>
             <input type="checkbox" checked={safe} onChange={(e) => setSafe(e.target.checked)} /> Show safe zones
@@ -35,7 +41,7 @@ export function PreviewSwitcher({ platform, format, items, columns = 1, label }:
         {items.map(({ title, ...it }, i) => (
           <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
             {title}
-            <AdPreview {...it} platform={platform} format={format} placement={placement} safeZones={safe} />
+            <AdPreview {...it} platform={platform} format={format} placement={placement} safeZones={safe} fit={fill ? "cover" : "contain"} />
           </div>
         ))}
       </div>

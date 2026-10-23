@@ -251,5 +251,5 @@ export function fitNote(fileRatio: number | null, p: Placement): { fits: boolean
   if (fileRatio === null || p.ratio === 0) return null;
   return Math.abs(fileRatio - p.ratio) <= 0.04
     ? { fits: true, text: `Your file is ${p.ratioLabel}: it fills this placement.` }
-    : { fits: false, text: `This placement is ${p.ratioLabel}. Your file is ${ratioName(Math.round(fileRatio * 1000), 1000)}, so it is cropped to fit from the centre (or shown with bars). Use a ${p.ratioLabel} file.` };
+    : { fits: false, text: `This placement is ${p.ratioLabel}. Your file is ${ratioName(Math.round(fileRatio * 1000), 1000)}, so there is empty space around it here. The platform may crop it to fill or add bars, so use a ${p.ratioLabel} file to control how it looks.` };
 }

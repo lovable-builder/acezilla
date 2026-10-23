@@ -342,3 +342,16 @@ table.t th:first-child, table.t td:first-child { text-align: left; }
 .ap-bar2 { background: #fff; color: #17161B; font-weight: 600; text-align: center; padding: 8px; border-radius: 8px; } .ap-bar2.tt { background: #fe2c55; color: #fff; }
 .ap-rail { position: absolute; right: 8px; bottom: 110px; display: flex; flex-direction: column; gap: 10px; font-size: 16px; text-align: center; color: #fff; } .ap-rail span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgb(0 0 0 / .4); }
 .ap-fit { padding: 6px 14px 0; font-size: 12px; } .ap-bare .ap-fit { text-align: center; padding: 8px 0 0; }
+
+/* Pictures are shown whole, at their own shape, with empty space around them. "Fill and crop" switches to the platforms' crop. */
+.ap-frame { background: var(--surface2); }
+.ap-frame > img, .ap-frame > video, .ap-card .ap-frame > img { object-fit: contain; }
+.ap-phone2-media img, .ap-phone2-media video { object-fit: contain; }
+.ap-car-strip img, .ap-car-strip i { object-fit: contain; background-color: var(--surface2); }
+.ap.fit-cover .ap-frame > img, .ap.fit-cover .ap-frame > video, .ap.fit-cover .ap-phone2-media img, .ap.fit-cover .ap-phone2-media video, .ap.fit-cover .ap-car-strip img { object-fit: cover; }
+.bw-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.bw-gallery button { position: relative; aspect-ratio: 1; padding: 0; border-radius: 12px; overflow: hidden; border: 2px solid var(--line); background: var(--surface2); cursor: pointer; transition: transform .2s, border-color .2s; }
+.bw-gallery button:hover { transform: translateY(-2px); }
+.bw-gallery button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 6px 14px -6px var(--accent); }
+.bw-gallery button[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 11px; }
+.bw-gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }

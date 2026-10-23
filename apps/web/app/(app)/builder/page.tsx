@@ -28,7 +28,7 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
   if (!current) return <Card>No workspace found for this account.</Card>;
   const { data: drafts } = await supabase.from("campaign_draft").select("id,platform,title,status,created_at").eq("workspace_id", current.id).order("created_at", { ascending: false }).limit(12);
   const { rows: prod } = await loadProducts(supabase, current.id, windowStart(todayIso(), 90), todayIso());
-  const catalog = prod.filter((r) => r.listed).slice(0, 200).map((r) => ({ id: r.productId, name: r.name, imageUrl: r.imageUrl, store: r.channel === "woocommerce" ? "WooCommerce" : r.channel === "allegro" ? "Allegro" : r.channel }));
+  const catalog = prod.filter((r) => r.listed).slice(0, 200).map((r) => ({ id: r.productId, name: r.name, imageUrl: r.imageUrl, images: r.images, store: r.channel === "woocommerce" ? "WooCommerce" : r.channel === "allegro" ? "Allegro" : r.channel }));
   const openId = /^[0-9a-f-]{36}$/.test(sp.draft ?? "") ? sp.draft! : (drafts?.[0]?.id as string | undefined);
   const { data: open } = openId ? await supabase.from("campaign_draft").select("id,platform,title,status,brief,output,created_at").eq("id", openId).eq("workspace_id", current.id).maybeSingle() : { data: null };
   const out = open?.output as BuilderOutput | undefined, brief = open?.brief as BuilderInput | undefined;

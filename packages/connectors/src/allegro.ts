@@ -184,15 +184,36 @@ export function summarizeFees(fees: FeeEntry[]): { types: FeeTypeRow[]; byCatego
 }
 
 // ---------------- offers ----------------
-export interface OfferInfo { offerId: string; name: string; price: number | null; visits: number | null; watchers: number | null; /** Units in stock, when Allegro reports it. */ stock: number | null; imageUrl: string | null }
+export interface OfferInfo { offerId: string; name: string; price: number | null; visits: number | null; watchers: number | null; /** Units in stock, when Allegro reports it. */ stock: number | null; imageUrl: string | null; /** Every photo of the offer, main first (filled by loadAllegroOfferImages). */ images: string[] }
 export async function loadAllegroOffers(c: AllegroCtx): Promise<OfferInfo[]> {
   const out: OfferInfo[] = [];
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   for (let page = 0; page < 5; page++) {
     const res = await allegroGet(c, "/sale/offers", { limit: "1000", offset: String(page * 1000), "publication.status": "ACTIVE" });
     const offers: any[] = res?.offers ?? [];
-    for (const o of offers) { const price = Number(o.sellingMode?.price?.amount); out.push({ offerId: String(o.id), name: String(o.name ?? ""), price: price > 0 ? price : null, visits: num(o.stats?.visitsCount), watchers: num(o.stats?.watchersCount), stock: num(o.stock?.available), imageUrl: safeImageUrl(o.primaryImage?.url) }); }
+    for (const o of offers) { const price = Number(o.sellingMode?.price?.amount); out.push({ offerId: String(o.id), name: String(o.name ?? ""), price: price > 0 ? price : null, visits: num(o.stats?.visitsCount), watchers: num(o.stats?.watchersCount), stock: num(o.stock?.available), imageUrl: safeImageUrl(o.primaryImage?.url), images: [] }); }
     if (offers.length < 1000) break;
+  }
+  return out;
+}
+
+/**
+ * Adds every photo of each offer, one detail request per offer, for the first `limit` offers. A failed request leaves that offer
+ * with its main photo only: photos are a convenience and never block a sync.
+ */
+export async function loadAllegroOfferImages(c: AllegroCtx, offers: OfferInfo[], limit = 40): Promise<OfferInfo[]> {
+  const out: OfferInfo[] = [];
+  for (const [i, o] of offers.entries()) {
+    let images = o.imageUrl ? [o.imageUrl] : [];
+    if (i < limit) {
+      try {
+        const d = await allegroGet(c, `/sale/product-offers/${encodeURIComponent(o.offerId)}`);
+        const list: unknown[] = Array.isArray(d?.images) ? d.images : [];
+        const urls = list.map((x) => safeImageUrl(typeof x === "string" ? x : (x as { url?: unknown } | null)?.url)).filter((u): u is string => !!u);
+        images = [...new Set([...(o.imageUrl ? [o.imageUrl] : []), ...urls])].slice(0, 10);
+      } catch { /* keep the main photo */ }
+    }
+    out.push({ ...o, images });
   }
   return out;
 }

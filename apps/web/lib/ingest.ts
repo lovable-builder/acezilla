@@ -80,7 +80,7 @@ export async function ingestOrders(sb: SupabaseClient, workspaceId: string, orde
 /** The store's product catalogue (including products that never sold). Upserts what was sent and removes deleted products. */
 export async function ingestProducts(sb: SupabaseClient, workspaceId: string, platform: "woocommerce", products: WooProduct[], removeIds: string[]) {
   const now = new Date().toISOString();
-  const rows = products.map((p) => ({ workspace_id: workspaceId, platform, external_id: p.externalId, name: p.name, sku: p.sku, price: p.price, status: p.status, stock_status: p.stockStatus, stock_qty: p.stockQty, image_url: p.imageUrl, product_type: p.productType, total_sales: p.totalSales, updated_at: now }));
+  const rows = products.map((p) => ({ workspace_id: workspaceId, platform, external_id: p.externalId, name: p.name, sku: p.sku, price: p.price, status: p.status, stock_status: p.stockStatus, stock_qty: p.stockQty, image_url: p.imageUrl, images: p.images, product_type: p.productType, total_sales: p.totalSales, updated_at: now }));
   for (const part of chunks(rows)) {
     const { error } = await sb.from("store_product").upsert(part, { onConflict: "workspace_id,platform,external_id" });
     if (error) throw new Error(`store_product: ${error.message}`);

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   allegroAuthUrl, allegroGet, AllegroApiError, buildAllegroDataset, chargesAreNegative, classifyFee, decodeAllegroJwt, exchangeAllegroCode, loadAllegroFees,
-  loadAllegroOffers, loadAllegroSales, refreshAllegroToken, salesToOrders, signAllegroState, summarizeFees, verifyAllegroState, ALLEGRO_SCOPES, type FeeEntry,
+  loadAllegroOfferImages, loadAllegroOffers, loadAllegroSales, refreshAllegroToken, salesToOrders, signAllegroState, summarizeFees, verifyAllegroState, ALLEGRO_SCOPES, type FeeEntry,
 } from "./allegro";
 
 const json = (b: unknown, status = 200, h: Record<string, string> = {}) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", ...h } });
@@ -114,17 +114,27 @@ test("loads billing entries and offers with their counters", async () => {
   const fees = await loadAllegroFees(ctx(f), 30, NOW);
   assert.deepEqual(fees.map((x) => [x.typeId, x.offerId, x.amount]), [["SUC", "o1", -12.3], ["", null, -3]]);
   const offers = await loadAllegroOffers(ctx(f));
-  assert.deepEqual(offers[0], { offerId: "o1", name: "Chair", price: 99, visits: 120, watchers: 4, stock: 7, imageUrl: "https://a.allegroimg.com/original/x" });
-  assert.deepEqual(offers[1], { offerId: "o2", name: "Table", price: null, visits: null, watchers: null, stock: null, imageUrl: null });
+  assert.deepEqual(offers[0], { offerId: "o1", name: "Chair", price: 99, visits: 120, watchers: 4, stock: 7, imageUrl: "https://a.allegroimg.com/original/x", images: [] });
+  assert.deepEqual(offers[1], { offerId: "o2", name: "Table", price: null, visits: null, watchers: null, stock: null, imageUrl: null, images: [] });
 });
 
 test("ad spend becomes daily spend per offer in the shared dataset; sales stay as orders", () => {
   const fees = [fee("1", "Kampania reklamowa", -5, "o1", "2026-10-20T08:00:00Z"), fee("2", "Kampania reklamowa", -7, "o1", "2026-10-20T20:00:00Z"), fee("3", "Kampania reklamowa", -2, "o1", "2026-10-21T01:00:00Z"), fee("4", "Kampania reklamowa", -1, null), fee("5", "Prowizja", -50, "o1")];
-  const ds = buildAllegroDataset({ sellerId: "9", sellerName: "shop", currency: "PLN", fees, offers: [{ offerId: "o1", name: "Chair", price: 1, visits: null, watchers: null, stock: null, imageUrl: null }], orders: [] });
+  const ds = buildAllegroDataset({ sellerId: "9", sellerName: "shop", currency: "PLN", fees, offers: [{ offerId: "o1", name: "Chair", price: 1, visits: null, watchers: null, stock: null, imageUrl: null, images: [] }], orders: [] });
   assert.equal(ds.accounts[0]!.name, "Allegro (shop)"); assert.equal(ds.accounts[0]!.platform, "allegro");
   assert.deepEqual(ds.ads.map((a) => [a.externalId, a.name]), [["allegro-offer-o1", "Chair"], ["allegro-offer-account", "Account-level ad costs"]]);
   const day = (ad: string, d: string) => ds.insights.find((i) => i.adExternalId === ad && i.date === d)?.spend;
   assert.equal(day("allegro-offer-o1", "2026-10-20"), 12); assert.equal(day("allegro-offer-o1", "2026-10-21"), 2); assert.equal(day("allegro-offer-account", "2026-10-20"), 1);
   assert.ok(ds.insights.every((i) => i.revenue === 0 && i.clicks === 0), "no invented ad statistics");
   assert.equal(ds.insights.reduce((s, i) => s + i.spend, 0), 15, "commission is not ad spend");
+});
+
+test("offer photos: every photo of an offer is collected, main first, only https, and a failed request keeps the main photo", async () => {
+  const f = ((url: string) => url.includes("/o1")
+    ? json({ images: ["https://a.allegroimg.com/original/2", { url: "https://a.allegroimg.com/original/3" }, "http://insecure.example/x.jpg", "javascript:alert(1)", "https://a.allegroimg.com/original/1"] })
+    : json({ error: "no" }, 500)) as unknown as typeof fetch;
+  const base = { name: "n", price: null, visits: null, watchers: null, stock: null };
+  const r = await loadAllegroOfferImages(ctx(f), [{ ...base, offerId: "o1", imageUrl: "https://a.allegroimg.com/original/1", images: [] }, { ...base, offerId: "o2", imageUrl: "https://a.allegroimg.com/original/9", images: [] }]);
+  assert.deepEqual(r[0]!.images, ["https://a.allegroimg.com/original/1", "https://a.allegroimg.com/original/2", "https://a.allegroimg.com/original/3"]);
+  assert.deepEqual(r[1]!.images, ["https://a.allegroimg.com/original/9"]);
 });

@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  AllegroApiError, buildAllegroDataset, chargesAreNegative, classifyFee, decodeAllegroJwt, feeCost, loadAllegroFees, loadAllegroOffers, loadAllegroSales, refreshAllegroToken, salesToOrders, summarizeFees, ALLEGRO_ID_PREFIX,
+  AllegroApiError, buildAllegroDataset, chargesAreNegative, classifyFee, decodeAllegroJwt, feeCost, loadAllegroFees, loadAllegroOfferImages, loadAllegroOffers, loadAllegroSales, refreshAllegroToken, salesToOrders, summarizeFees, ALLEGRO_ID_PREFIX,
 } from "@acezilla/connectors";
 import { decryptToken, encryptToken } from "@/lib/crypto";
 import { alignCurrency } from "@/lib/currency";
@@ -52,7 +52,8 @@ export interface AllegroStats { syncedAt: string; days: number; orders: number; 
 export async function syncAllegro(admin: Admin, conn: { id: string; workspace_id: string }, days: number) {
   const token = await getAllegroAccessToken(admin, conn.id);
   const c = { accessToken: token, sandbox: allegroEnv().sandbox, userAgent: allegroEnv().userAgent };
-  const [{ lines, truncated }, fees, offers] = await Promise.all([loadAllegroSales(c, days), loadAllegroFees(c, days), loadAllegroOffers(c)]);
+  const [{ lines, truncated }, fees, offersBasic] = await Promise.all([loadAllegroSales(c, days), loadAllegroFees(c, days), loadAllegroOffers(c)]);
+  const offers = await loadAllegroOfferImages(c, offersBasic); // every photo of each offer, for the campaign builder
   const orders = salesToOrders(lines);
   const jwt = decodeAllegroJwt(token);
   const currency = lines.find((l) => l.currency)?.currency ?? fees.find((f) => f.currency)?.currency ?? "PLN";
@@ -81,7 +82,7 @@ export async function syncAllegro(admin: Admin, conn: { id: string; workspace_id
   for (let i = 0; i < feeRows.length; i += 500) await admin.from("marketplace_fee").upsert(feeRows.slice(i, i + 500), { onConflict: "workspace_id,platform,entry_id" });
 
   const day = new Date().toISOString().slice(0, 10);
-  if (offers.length) await admin.from("offer_stats_snapshots").upsert(offers.map((o) => ({ workspace_id: conn.workspace_id, platform: "allegro", offer_id: o.offerId, day, name: o.name.slice(0, 200), price: o.price, visits: o.visits, watchers: o.watchers, stock: o.stock, image_url: o.imageUrl })), { onConflict: "workspace_id,platform,offer_id,day" });
+  if (offers.length) await admin.from("offer_stats_snapshots").upsert(offers.map((o) => ({ workspace_id: conn.workspace_id, platform: "allegro", offer_id: o.offerId, day, name: o.name.slice(0, 200), price: o.price, visits: o.visits, watchers: o.watchers, stock: o.stock, image_url: o.imageUrl, images: o.images })), { onConflict: "workspace_id,platform,offer_id,day" });
 
   const stats: AllegroStats = { syncedAt: new Date().toISOString(), days, orders: orders.length, ordersTruncated: truncated, currency, fees: summarizeFees(fees) };
   await admin.from("connection").update({

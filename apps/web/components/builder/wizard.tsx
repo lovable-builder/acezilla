@@ -1,16 +1,16 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { budgetGuide, creativeChecks, MEDIA_PLATFORMS, MEDIA_SPECS, type MediaPlatform } from "@acezilla/models";
 import { createDraft } from "@/app/(app)/builder/actions";
 import { BrandLogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
-import { Thumb } from "@/components/app/thumb";
+import { Thumb, thumbUrl } from "@/components/app/thumb";
 import { PreviewSwitcher } from "./preview-switcher";
 import { CreativeUpload, type UploadedAsset } from "./creative-upload";
 
 const STEPS = ["Platform", "Goal & format", "Product & message", "Budget", "Review"];
-export interface CatalogEntry { id: string; name: string; store: string; imageUrl?: string | null }
+export interface CatalogEntry { id: string; name: string; store: string; imageUrl?: string | null; /** All photos of the listing, main first. */ images?: string[] }
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -42,6 +42,8 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
   const [assets, setAssets] = useState<UploadedAsset[]>([]);
   const [usePhotos, setUsePhotos] = useState(true);
   const [pickedName, setPickedName] = useState("");
+  /** The photo chosen for each product, by product name. The listing's main photo is used until one is chosen. */
+  const [chosenPhoto, setChosenPhoto] = useState<Record<string, string>>({});
 
   const fmt = spec.formats.find((f) => f.id === format) ?? spec.formats[0]!;
   const opts = spec.optimizations?.[goal];
@@ -65,10 +67,22 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
   const hint = step === 2 ? (fmt.items ? `Pick ${fmt.items.min} to ${fmt.items.max} products.` : "Describe what you are advertising in at least a sentence.") : "";
   const primary = fmt.items ? items.join(", ") : product;
   // Product photos: for a carousel, the photos of the chosen products; otherwise the product started from.
-  const photoOf = (name: string) => catalog.find((c) => c.name === name)?.imageUrl ?? null;
-  const productPhotos = (fmt.items ? items.map(photoOf) : [photoOf(pickedName)]).filter((u): u is string => !!u).slice(0, 10);
+  const galleryOf = (name: string) => { const c = catalog.find((x) => x.name === name); return c?.images?.length ? c.images : c?.imageUrl ? [c.imageUrl] : []; };
+  const photoOf = (name: string) => chosenPhoto[name] ?? galleryOf(name)[0] ?? null;
+  const productsWithPhotos = fmt.items ? items : pickedName ? [pickedName] : [];
+  const productPhotos = productsWithPhotos.map(photoOf).filter((u): u is string => !!u).slice(0, 10);
   const first = assets[0];
-  const mediaRatio = first ? first.w / first.h : null;
+  // The real shape of the chosen listing photo, read in the browser, so the preview can say whether a placement fits it.
+  const [photoRatio, setPhotoRatio] = useState<{ url: string; ratio: number } | null>(null);
+  const shownPhoto = !first && usePhotos ? productPhotos[0] : undefined;
+  useEffect(() => {
+    if (!shownPhoto) return;
+    const i = new Image();
+    i.referrerPolicy = "no-referrer";
+    i.onload = () => i.naturalHeight > 0 && setPhotoRatio({ url: shownPhoto, ratio: i.naturalWidth / i.naturalHeight });
+    i.src = shownPhoto;
+  }, [shownPhoto]);
+  const mediaRatio = first ? first.w / first.h : shownPhoto && photoRatio?.url === shownPhoto ? photoRatio.ratio : null;
   const checks = creativeChecks(platform, format, assets, { cards: fmt.items ? items.length || fmt.items.min : undefined });
   const media = assets.length ? (assets[0]!.kind === "video" ? { images: [], video: assets[0]!.preview } : { images: assets.map((a) => a.preview) }) : usePhotos && productPhotos.length ? { images: productPhotos } : undefined;
 
@@ -166,12 +180,30 @@ export function BuilderWizard({ currency, brand, catalog, workspaceId }: { curre
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div><div className="eyebrow">Pictures and video</div><p className="sub" style={{ margin: "2px 0 0", fontSize: 13 }}>Used for the preview and checked against {spec.short}&apos;s shapes. They are not sent anywhere.</p></div>
-            {productPhotos.length > 0 && (
+            {productsWithPhotos.some((n) => galleryOf(n).length > 0) && (
               <label className="bw-switch">
                 <input type="checkbox" checked={usePhotos} onChange={(e) => setUsePhotos(e.target.checked)} /><span className="track" />
-                <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontWeight: 600 }}>Use my product photos</b>{productPhotos.slice(0, 5).map((u) => <Thumb key={u} src={u} name="" size={30} />)}</span>
+                <span><b style={{ fontWeight: 600 }}>Use photos from my listings</b><span className="sub" style={{ display: "block", margin: 0, fontSize: 12 }}>Choose which photo of each listing to use.</span></span>
               </label>
             )}
+            {usePhotos && productsWithPhotos.map((n) => {
+              const g = galleryOf(n);
+              if (g.length === 0) return null;
+              const current = photoOf(n);
+              return (
+                <div key={n} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}><b style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{n}</b><span className="eyebrow">{g.length} photo{g.length === 1 ? "" : "s"}</span></div>
+                  <div className="bw-gallery" role="group" aria-label={`Photos of ${n}`}>
+                    {g.map((u, k) => (
+                      <button key={u} type="button" aria-pressed={current === u} aria-label={`Use photo ${k + 1} of ${n}`} onClick={() => setChosenPhoto((c) => ({ ...c, [n]: u }))}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={thumbUrl(u)} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
             {usePhotos && productPhotos.length > 0 && <input type="hidden" name="productImages" value={JSON.stringify(productPhotos)} />}
             <CreativeUpload workspaceId={workspaceId} assets={assets} onChange={setAssets} />
             {(assets.length > 0 || platform === "tiktok" || format === "pmax") && (

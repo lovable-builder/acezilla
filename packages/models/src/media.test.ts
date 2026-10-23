@@ -137,6 +137,6 @@ test("each platform previews its own placements, with Reels and Stories at 9:16"
 test("the fit note says whether a file fills a placement or gets cropped", () => {
   const reels = PLACEMENTS.find((p) => p.id === "reels")!;
   assert.equal(fitNote(1080 / 1920, reels)!.fits, true);
-  const sq = fitNote(1, reels)!; assert.equal(sq.fits, false); assert.match(sq.text, /9:16/);
+  const sq = fitNote(1, reels)!; assert.equal(sq.fits, false); assert.match(sq.text, /9:16/); assert.match(sq.text, /empty space/);
   assert.equal(fitNote(null, reels), null); assert.equal(fitNote(1, PLACEMENTS.find((p) => p.id === "search")!), null);
 });
