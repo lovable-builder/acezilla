@@ -4,6 +4,8 @@ import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PairBars, ProfitBars } from "@/components/dash/bars";
+import { PricingAdvisor } from "@/components/attribution/pricing-advisor";
+import { buildPricingModel } from "@acezilla/models";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money, PLATFORM, x } from "@/lib/format";
 import { parsePeriod, periodQs, todayIso, windowStart } from "@/lib/period";
@@ -37,6 +39,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
   // Allegro offers (profit per offer)
   const profit = await loadOfferProfit(supabase, current.id, start, endDate);
   const adImports = profit ? await loadAdImports(supabase, current.id) : [];
+  const pricingModels = profit ? profit.offers.map((o) => buildPricingModel(o, profit.vatRate)).filter((m): m is NonNullable<typeof m> => m !== null) : [];
 
   const noData = orders.length === 0 && !d && !profit;
   return (
@@ -175,6 +178,15 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
               <p className="sub" style={{ margin: 0, fontSize: 12 }}>Organic units are units sold minus the units Allegro credits to your ads, so they are sales you got without paying for a click. Allegro counts an ad sale when a shopper clicked the ad first, so the ad figure can exceed units sold in a short period; organic is then shown as 0. The report covers one date range, so for a shorter period its figures are spread evenly over the days.</p>
             </Card>
           )}
+          <Card id="pricing" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <h2 className="h2" style={{ margin: 0 }}>Price and sourcing advisor</h2>
+              <p className="sub" style={{ margin: "4px 0 0", fontSize: 13 }}>See what a different selling price, or a cheaper next shipment, would do to an offer&apos;s profit given what you spend on ads. Drag the sliders, or ask the AI for a suggestion.</p>
+            </div>
+            {pricingModels.length === 0
+              ? <p className="sub" style={{ margin: 0 }}>Enter a cost per unit for an offer that sold in this period (in the table above) and it appears here.</p>
+              : <PricingAdvisor models={pricingModels} currency={cur} period={{ days: sp.days, from: sp.from, to: sp.to }} />}
+          </Card>
           <Card id="ads-report" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <h2 className="h2" style={{ margin: 0 }}>Exact ad cost per offer</h2>
             <p className="sub" style={{ margin: 0, fontSize: 13 }}>

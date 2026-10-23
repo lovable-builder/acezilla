@@ -8,3 +8,4 @@ export * from "./ai";
 export * from "./channels";
 export * from "./products";
 export * from "./media";
+export * from "./pricing";

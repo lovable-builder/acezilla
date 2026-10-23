@@ -2,7 +2,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireWriter } from "@/lib/workspace";
+import { getWorkspaceContext, requireWriter } from "@/lib/workspace";
+import { AI_LIMITS, friendlyAiError, takeAiQuota } from "@/lib/ai-guard";
+import { getLlm } from "@/lib/llm";
+import { loadOfferProfit } from "@/lib/data";
+import { parsePeriod, todayIso, windowStart } from "@/lib/period";
+import { buildPricingModel, buildPricingPrompt, parsePricingResponse, PRICING_MAX_TOKENS, PRICING_SCHEMA, PRICING_SYSTEM, pricingScenarios, type PricingAdvice, type PricingScenarios } from "@acezilla/models";
+import type { JsonSchema } from "@acezilla/llm";
 import { isXlsx, MAX_REPORT_BYTES, parseAdsReport, xlsxToTsv } from "@acezilla/connectors";
 
 /** Only the period parameters survive a round trip, so a form cannot send the user somewhere else. */
@@ -104,4 +110,32 @@ export async function deleteAdsReport(formData: FormData) {
     await createAdminClient().from("offer_ad_report").delete().eq("workspace_id", workspace.id).eq("batch_id", batch);
   } catch (e) { return back(qs, { error: e instanceof Error ? e.message : "Could not remove the import" }); }
   back(qs, { notice: "Import removed. Ad costs go back to being shared equally." });
+}
+
+/**
+ * Asks the AI how to fix an offer's profit. The figures are worked out here from the stored data, not taken from the browser; the
+ * AI only chooses between them and explains. Nothing is changed anywhere: it is advice.
+ */
+export async function suggestPricing(input: { offerId: unknown; days?: unknown; from?: unknown; to?: unknown; elasticity?: unknown }): Promise<{ ok: true; advice: PricingAdvice; scenarios: PricingScenarios } | { ok: false; error: string }> {
+  try {
+    const { supabase, current } = await getWorkspaceContext();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!current || !auth.user) return { ok: false, error: "Sign in again to continue." };
+    const offerId = String(input.offerId ?? "");
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(offerId)) return { ok: false, error: "Unknown offer." };
+    const period = parsePeriod({ days: input.days === undefined ? undefined : String(input.days), from: input.from === undefined ? undefined : String(input.from), to: input.to === undefined ? undefined : String(input.to) });
+    const end = period.endDate ?? todayIso();
+    const profit = await loadOfferProfit(supabase, current.id, windowStart(end, period.windowDays), end);
+    const offer = profit?.offers.find((o) => o.offerId === offerId);
+    const model = offer && profit ? buildPricingModel(offer, profit.vatRate) : null;
+    if (!model) return { ok: false, error: "This offer needs sales in the period and a cost per unit before it can be priced." };
+    const e = Number(input.elasticity);
+    const scenarios = pricingScenarios(model, { currency: current.currency, elasticity: [0, 1, 2].includes(e) ? e : 0 });
+    if (!(await takeAiQuota(current.id, "pricing"))) return { ok: false, error: `You have used today's ${AI_LIMITS.pricing} pricing suggestions for this workspace. It resets tomorrow.` };
+    const advice = await getLlm().generateJson({
+      system: PRICING_SYSTEM, user: buildPricingPrompt(scenarios), schema: PRICING_SCHEMA as unknown as JsonSchema,
+      maxOutputTokens: PRICING_MAX_TOKENS, temperature: 0.2, validate: (raw) => parsePricingResponse(raw, scenarios),
+    });
+    return { ok: true, advice, scenarios };
+  } catch (e) { return { ok: false, error: friendlyAiError(e) }; }
 }

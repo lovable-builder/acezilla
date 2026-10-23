@@ -3,7 +3,7 @@ import { LlmError } from "@acezilla/llm";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** Daily limits per workspace and feature. They bound cost and abuse; raise them when billing exists. */
-export const AI_LIMITS = { copilot: 40, summary: 6, builder: 20 } as const;
+export const AI_LIMITS = { copilot: 40, summary: 6, builder: 20, pricing: 15 } as const;
 
 /** Counts one use against today's limit. Returns false when the limit is reached. */
 export async function takeAiQuota(workspaceId: string, kind: keyof typeof AI_LIMITS): Promise<boolean> {
