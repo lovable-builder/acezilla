@@ -127,12 +127,12 @@ export default async function SiteReport({ params, searchParams }: { params: Pro
             <Link href={`/seo/${siteId}?pages=issues`} className={`nav-item${pagesView === "issues" ? " active" : ""}`} style={{ width: "fit-content" }}>With issues {pageList.filter((x) => x.issues.length > 0).length}</Link>
           </div>
           <Card style={{ overflowX: "auto", padding: 0 }}>
-            <table className="t" style={{ margin: 0 }}>
+            <table className="t seo-table-pages" style={{ margin: 0 }}>
               <thead><tr><th style={{ textAlign: "left" }}>Page</th><th>Title</th><th>Description</th><th>H1</th><th>Words</th><th>Response</th><th style={{ textAlign: "left" }}>Issues</th></tr></thead>
               <tbody>
                 {shownPages.map(({ p, issues }) => (
                   <tr key={p.url}>
-                    <td style={{ textAlign: "left", maxWidth: 260, overflowWrap: "anywhere" }}><span className="mono" style={{ fontSize: 12 }}>{new URL(p.url).pathname}{new URL(p.url).search}</span>{p.title && <div style={{ fontSize: 12, color: "var(--ink3)" }}>{p.title}</div>}</td>
+                    <td style={{ textAlign: "left", maxWidth: 260, overflowWrap: "anywhere" }}><span className="seo-page-url mono" title={`${new URL(p.url).pathname}${new URL(p.url).search}`} style={{ fontSize: 12 }}>{new URL(p.url).pathname}{new URL(p.url).search}</span>{p.title && <div className="seo-page-title" title={p.title} style={{ fontSize: 12, color: "var(--ink3)" }}>{p.title}</div>}</td>
                     <td className="tabnum">{p.titleLen || "–"}</td>
                     <td className="tabnum">{p.metaDescriptionLen || "–"}</td>
                     <td className="tabnum">{p.h1.length}</td>
@@ -151,11 +151,11 @@ export default async function SiteReport({ params, searchParams }: { params: Pro
       {shown && report && (
         <section>
           <h2 className="h2"><span className="n">{num()}</span>Links</h2>
-          <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Card style={{ display: "flex", flexDirection: "column", gap: 10, overflowX: "auto" }}>
             {report.broken.length === 0 ? <div>All {report.linksChecked} internal links we checked answered normally.</div> : (
               <>
                 <div><b>{report.broken.length} broken</b> of {report.linksChecked} internal links checked.</div>
-                <table className="t" style={{ margin: 0 }}>
+                <table className="t seo-table-links" style={{ margin: 0 }}>
                   <thead><tr><th style={{ textAlign: "left" }}>Broken link</th><th style={{ width: 110 }}>Answer</th><th style={{ textAlign: "left" }}>Linked from</th></tr></thead>
                   <tbody>{report.broken.map((b) => <tr key={b.url}><td style={{ textAlign: "left", overflowWrap: "anywhere" }} className="mono">{new URL(b.url).pathname}</td><td className="tabnum">{b.status ?? "No response"}</td><td style={{ textAlign: "left" }} className="mono">{b.from.join(", ") || "–"}</td></tr>)}</tbody>
                 </table>
@@ -170,7 +170,7 @@ export default async function SiteReport({ params, searchParams }: { params: Pro
           <h2 className="h2"><span className="n">{num()}</span>What your site talks about</h2>
           <p className="sub" style={{ marginTop: -6 }}>The words and phrases used most across your pages. The main ones should appear in your homepage title, heading and description.</p>
           <Card style={{ overflowX: "auto", padding: 0 }}>
-            <table className="t" style={{ margin: 0 }}>
+            <table className="t seo-table-keywords" style={{ margin: 0 }}>
               <thead><tr><th style={{ textAlign: "left" }}>Term</th><th>Uses</th><th>Pages</th><th>In title</th><th>In H1</th><th>In description</th></tr></thead>
               <tbody>{report.keywords.map((k) => (
                 <tr key={k.term}><td style={{ textAlign: "left", fontWeight: 600 }}>{k.term}</td><td className="tabnum">{k.count}</td><td className="tabnum">{k.pages}</td>
@@ -190,7 +190,7 @@ export default async function SiteReport({ params, searchParams }: { params: Pro
             <p className="sub" style={{ marginTop: -6 }}>{DIM_HELP[d]}</p>
             <Card style={{ overflowX: "auto", padding: 0 }}>
               {groups.map((g) => (
-                <table className="t" key={g} style={{ margin: 0 }}>
+                <table className="t seo-table-findings" key={g} style={{ margin: 0 }}>
                   <thead><tr><th style={{ width: "26%" }}>{g}</th><th style={{ textAlign: "left" }}>What we found</th><th style={{ width: 130 }}>Status</th></tr></thead>
                   <tbody>
                     {rows.filter((r) => r.grp === g).map((r) => (

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { exchangeGoogleCode, GOOGLE_ADS_SCOPE } from "@acezilla/connectors";
+import { exchangeGoogleCode, GA4_SCOPE, GOOGLE_ADS_SCOPE, MERCHANT_SCOPE, SEARCH_CONSOLE_SCOPE } from "@acezilla/connectors";
 import { encryptToken } from "@/lib/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireWriter } from "@/lib/workspace";
@@ -14,6 +14,9 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   if (!code) return fail("Google did not return a login code");
 
+  const kind = req.headers.get("cookie")?.match(/az_google_kind=(ga4|merchant|searchconsole)/)?.[1];
+  const platform = kind ?? "google";
+  const scope = kind === "ga4" ? GA4_SCOPE : kind === "merchant" ? MERCHANT_SCOPE : kind === "searchconsole" ? SEARCH_CONSOLE_SCOPE : GOOGLE_ADS_SCOPE;
   try {
     const { workspace } = await requireWriter();
     const { refreshToken } = await exchangeGoogleCode({
@@ -21,14 +24,15 @@ export async function GET(req: Request) {
       redirectUri: `${url.origin}/api/connect/google/callback`, code,
     });
     const admin = createAdminClient();
-    const row = { workspace_id: workspace.id, platform: "google", scopes: [GOOGLE_ADS_SCOPE], status: "active", token_enc: encryptToken(refreshToken), token_expires_at: null };
-    const { data: existing } = await admin.from("connection").select("id").eq("workspace_id", workspace.id).eq("platform", "google").maybeSingle();
+    const row = { workspace_id: workspace.id, platform, scopes: [scope], status: "active", token_enc: encryptToken(refreshToken), token_expires_at: null };
+    const { data: existing } = await admin.from("connection").select("id").eq("workspace_id", workspace.id).eq("platform", platform).maybeSingle();
     const { error } = existing ? await admin.from("connection").update(row).eq("id", existing.id) : await admin.from("connection").insert(row);
     if (error) return fail(error.message);
   } catch (e) {
-    return fail(e instanceof Error ? e.message : "Could not connect Google Ads");
+    return fail(e instanceof Error ? e.message : kind === "ga4" ? "Could not connect Google Analytics" : kind === "merchant" ? "Could not connect Google Merchant Center" : kind === "searchconsole" ? "Could not connect Google Search Console" : "Could not connect Google Ads");
   }
-  const res = NextResponse.redirect(`${url.origin}/connections/google`);
+  const res = NextResponse.redirect(`${url.origin}/connections/${platform}`);
   res.cookies.delete({ name: "az_google_state", path: "/api/connect/google" });
+  res.cookies.delete({ name: "az_google_kind", path: "/api/connect/google" });
   return res;
 }

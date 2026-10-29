@@ -12,7 +12,8 @@ import { shiftDate } from "@acezilla/models";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money, PLATFORM, x } from "@/lib/format";
 import { parsePeriod, periodQs, todayIso, windowStart } from "@/lib/period";
-import { loadAdImports, loadAdRows, loadOfferProfit, loadOrders } from "@/lib/data";
+import { loadAdImports, loadAdRows, loadAnalytics, loadOfferProfit, loadOrders } from "@/lib/data";
+import { TrafficPanel } from "@/components/attribution/traffic-panel";
 import { deleteAdsReport, importAdsReport, saveOfferCost, saveVatRate } from "./actions";
 
 export const metadata = { title: "Attribution · acezilla" };
@@ -38,6 +39,9 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
   const orders = await loadOrders(supabase, current.id, start, endDate);
   const attr = buildAttribution({ platforms: d?.platforms ?? [], campaigns: d?.campaigns ?? [], orders, nonReporting: ["allegro"] });
   const totalSales = orders.reduce((s, o) => s + o.revenue, 0);
+
+  // Website visits (Google Analytics), to set next to the clicks the ad platforms billed
+  const analytics = await loadAnalytics(supabase, current.id, start, endDate);
 
   // Allegro offers (profit per offer)
   const profit = await loadOfferProfit(supabase, current.id, start, endDate);
@@ -112,7 +116,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
             </Card>
           )}
           {attr.unmatched.length > 0 && (
-            <Card>
+            <Card style={{ overflowX: "auto" }}>
               <b>Order tags that match no campaign</b>
               <p className="sub" style={{ fontSize: 13, margin: "4px 0 8px" }}>Orders carry these campaign names, but no ad campaign has the same name. Use the exact campaign name (or its ID) in <span className="mono">utm_campaign</span> so the revenue is credited.</p>
               <table className="t tabnum" style={{ margin: 0 }}>
@@ -122,6 +126,11 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
           )}
         </section>
       )}
+
+      <section id="analytics" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Website visits: Google Analytics vs ad clicks</h2>
+        <TrafficPanel ga={analytics} ads={rows.filter((r) => r.platform !== "allegro")} start={start} end={endDate} cur={cur} />
+      </section>
 
       {(hasAllegro || hasWoo) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }} role="tablist" aria-label="Store detail">

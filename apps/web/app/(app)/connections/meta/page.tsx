@@ -47,7 +47,7 @@ export default async function MetaAccounts({ searchParams }: { searchParams: Pro
         ))}
         {accounts.length === 0 && !loadError && <Card>No ad accounts found for this login. Make sure your Meta user has access to an ad account in the business portfolio.</Card>}
         {accounts.length > 0 && (
-          <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <label className="history-range" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <span className="eyebrow">History</span>
             <select name="range" defaultValue="730" className="field" style={{ padding: "8px 10px" }}>
               <option value="90">Last 90 days</option>

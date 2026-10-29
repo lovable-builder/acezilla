@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildOfferProfit, buildProductList, type CatalogItem, type SoldLine, type AdStats, type DailyRow, type FeeRow, type LineRow, type OrderRow } from "@acezilla/models";
+import { buildOfferProfit, buildProductList, type GaRow, type CatalogItem, type SoldLine, type AdStats, type DailyRow, type FeeRow, type LineRow, type OrderRow } from "@acezilla/models";
 import { shiftDate } from "@acezilla/models";
 
 const PAGE = 1000;
@@ -118,4 +118,21 @@ export async function loadCampaignLinks(supabase: SupabaseClient, workspaceId: s
 export async function loadUnitCosts(supabase: SupabaseClient, workspaceId: string, platform: string) {
   const { data } = await supabase.from("offer_cost").select("offer_id,unit_cost").eq("workspace_id", workspaceId).eq("platform", platform);
   return new Map((data ?? []).map((c) => [c.offer_id as string, Number(c.unit_cost)]));
+}
+
+/** Google Analytics traffic for a period, or null when Analytics is not connected. Read with the user's session, so row-level security applies. */
+export async function loadAnalytics(supabase: SupabaseClient, workspaceId: string, start: string, end: string) {
+  const { data: conn } = await supabase.from("connection").select("status,last_sync_at,last_error").eq("workspace_id", workspaceId).eq("platform", "ga4").maybeSingle();
+  if (!conn) return null;
+  const { data: props } = await supabase.from("analytics_property").select("name,currency").eq("workspace_id", workspaceId).order("name");
+  const rows: GaRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await supabase.from("analytics_daily").select("date,channel,sessions,conversions,revenue").eq("workspace_id", workspaceId).gte("date", start).lte("date", end).order("date").range(from, from + PAGE - 1);
+    for (const r of data ?? []) rows.push({ date: r.date as string, channel: r.channel as string, sessions: Number(r.sessions), conversions: Number(r.conversions), revenue: Number(r.revenue) });
+    if ((data?.length ?? 0) < PAGE) break;
+  }
+  return {
+    status: conn.status as string, lastSync: (conn.last_sync_at as string | null) ?? null, error: (conn.last_error as string | null) ?? null,
+    properties: (props ?? []).map((p) => ({ name: p.name as string, currency: (p.currency as string | null) ?? null })), rows,
+  };
 }

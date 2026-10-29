@@ -85,7 +85,7 @@ const FLOOR_USD: Record<MediaPlatform, { default: number; sales?: number }> = {
 /** Daily budget that gives a new campaign room to learn, in US dollars. */
 const RECOMMENDED_USD: Record<MediaPlatform, number> = { meta: 6, tiktok: 8, google: 6 };
 /** Approximate units of currency per US dollar. Only for sizing budgets, never for reporting money. */
-const PER_USD: Record<string, number> = { USD: 1, EUR: 0.92, GBP: 0.79, PLN: 3.9, EGP: 49, AED: 3.67, SAR: 3.75, CAD: 1.37, AUD: 1.5, CHF: 0.88, SEK: 10.5, NOK: 10.7, DKK: 6.9, CZK: 23, HUF: 360, RON: 4.6, TRY: 34, INR: 83, JPY: 150, BRL: 5 };
+export const PER_USD: Record<string, number> = { USD: 1, EUR: 0.92, GBP: 0.79, PLN: 3.9, EGP: 49, AED: 3.67, SAR: 3.75, CAD: 1.37, AUD: 1.5, CHF: 0.88, SEK: 10.5, NOK: 10.7, DKK: 6.9, CZK: 23, HUF: 360, RON: 4.6, TRY: 34, INR: 83, JPY: 150, BRL: 5 };
 const roundUp = (n: number) => (n >= 100 ? Math.ceil(n / 10) * 10 : Math.ceil(n));
 
 export interface BudgetGuide { floor: number; recommended: number; currency: string }

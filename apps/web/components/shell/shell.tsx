@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NAV } from "./nav";
+import { ThemeToggle } from "./theme-toggle";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
 interface Props {
@@ -49,7 +50,10 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
             </div>
           ))}
         </nav>
-        <div className="eyebrow">{syncLabel}</div>
+        <div className="sb-foot">
+          <div className="sb-sync"><i className="tt" /><i className="me" /><i className="go" /><span>{syncLabel}</span></div>
+          <ThemeToggle />
+        </div>
       </aside>
       {open && <button className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} />}
       <div>

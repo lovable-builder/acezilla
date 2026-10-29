@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { exchangeMetaCode, fetchMetaDataset, listMetaAdAccounts, metaAuthUrl, MetaApiError } from "./meta";
+import { exchangeMetaCode, fetchMetaDataset, fetchMetaLibraryAds, listMetaAdAccounts, metaAuthUrl, MetaApiError } from "./meta";
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 const fail = (status: number, body: unknown) => ({ ok: false, status, json: async () => body }) as Response;
@@ -69,4 +69,27 @@ test("OAuth helpers", async () => {
   assert.deepEqual(await exchangeMetaCode({ appId: "1", appSecret: "x", redirectUri: "r", code: "c", fetch: f }), { accessToken: "AT", expiresInSec: 5184000 });
   const bad = (async () => fail(400, { error: { message: "Code expired" } })) as unknown as typeof fetch;
   await assert.rejects(exchangeMetaCode({ appId: "1", appSecret: "x", redirectUri: "r", code: "c", fetch: bad }), /Code expired/);
+});
+
+test("ad library: reads ads for a country without keeping Meta's snapshot link, and a stopped ad has an end date", async () => {
+  const seen: string[] = [];
+  const f = (async (url: string) => {
+    seen.push(url);
+    return { ok: true, status: 200, json: async () => ({ data: [
+      { id: "1", page_name: "Acme", ad_delivery_start_time: "2026-08-01", ad_creative_bodies: ["-20% on mugs"], ad_creative_link_titles: ["Sale"], eu_total_reach: 12000, ad_snapshot_url: "https://x?access_token=SECRET" },
+      { id: "2", page_name: "Acme", ad_delivery_start_time: "2026-08-03T00:00:00+0000", ad_delivery_stop_time: "2026-08-10" },
+    ] }) } as Response;
+  }) as unknown as typeof fetch;
+  const ads = await fetchMetaLibraryAds({ accessToken: "T", fetch: f }, { search: "Acme", country: "PL" });
+  assert.deepEqual(ads[0], { id: "1", pageName: "Acme", startedOn: "2026-08-01", endedOn: null, text: "-20% on mugs", headline: "Sale", reach: 12000 });
+  assert.deepEqual([ads[1]!.startedOn, ads[1]!.endedOn, ads[1]!.reach], ["2026-08-03", "2026-08-10", null]);
+  assert.ok(!JSON.stringify(ads).includes("SECRET"));
+  const q = new URL(seen[0]!).searchParams;
+  assert.equal(q.get("ad_reached_countries"), '["PL"]');
+  assert.equal(q.get("search_terms"), "Acme");
+});
+
+test("ad library: an account Meta has not approved gets a plain instruction", async () => {
+  const f = (async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "Application does not have permission for this action", code: 10, error_subcode: 2332002 } }) }) as Response) as unknown as typeof fetch;
+  await assert.rejects(fetchMetaLibraryAds({ accessToken: "T", fetch: f }, { search: "x", country: "PL" }), (e) => e instanceof MetaApiError && e.code === 10 && /facebook\.com\/ads\/library\/api/.test(e.message));
 });

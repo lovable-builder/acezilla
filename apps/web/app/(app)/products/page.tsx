@@ -3,6 +3,7 @@ import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Thumb } from "@/components/app/thumb";
+import { MerchantPanel } from "@/components/products/merchant-panel";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { int, money } from "@/lib/format";
 import { parsePeriod, todayIso, windowStart } from "@/lib/period";
@@ -31,6 +32,10 @@ export default async function Products({ searchParams }: { searchParams: Promise
   const adRows = connected.length ? await loadAdRows(supabase, current.id) : [];
   const links = connected.length ? await loadCampaignLinks(supabase, current.id) : new Map<string, { channel: string; productId: string }>();
   const adSpend = adSpendByProduct(adRows, rows, links, shiftDate(end, -29), end);
+  // Only Google Ads campaigns use the Merchant Center feed, so only their spend can be wasted on a blocked product.
+  const googleSpend = adSpendByProduct(adRows.filter((r) => r.platform === "google"), rows, links, shiftDate(end, -29), end);
+  const googleLines = rows.filter((r) => r.listed && (googleSpend.get(`${r.channel}|${r.productId}`) ?? 0) > 0)
+    .map((r) => ({ key: `${r.channel}|${r.productId}`, name: r.name, sku: r.sku, productId: r.productId, spend: googleSpend.get(`${r.channel}|${r.productId}`) ?? 0 }));
   const level = (r: (typeof rows)[number]): StockLevel => stockLevel({ qty: r.stockQty, status: r.stock });
   const spendOf = (r: (typeof rows)[number]) => adSpend.get(`${r.channel}|${r.productId}`) ?? 0;
   const FILTERS = [["all", "All"], ["best", "Best sellers"], ["noads", "No ads"], ["low", "Low stock"], ["out", "Out of stock"]] as const;
@@ -51,6 +56,8 @@ export default async function Products({ searchParams }: { searchParams: Promise
         <h1 className="page">Your products and listings</h1>
         <p className="sub">Everything you list in your connected stores, including products that have not sold. Sales are for the period above.</p>
       </div>
+
+      <MerchantPanel supabase={supabase} workspaceId={current.id} today={todayIso()} spend={googleLines} currency={cur} />
 
       {connected.length === 0 ? (
         <Card style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>

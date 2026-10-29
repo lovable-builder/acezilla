@@ -134,7 +134,7 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare, c
         ))}
       </div>
       {channels.length > 0 && <ChannelsCard channels={channels} cur={cur} />}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,340px),1fr))", gap: 24 }}>
         <Card>
           <h2 className="h2"><span className="n">B</span>{spendByDate ? "Store revenue vs ad spend" : "Store revenue"}</h2>
           <RevenueChart series={chart} />
@@ -410,7 +410,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       {store ? <StoreBlock channels={buildChannels(orderRows, { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} store={store} cur={cur} spendByDate={spendByDate} adSpend={k.spend.value} platformRoas={reporting ? k.roas.value : null} compare={cmp} /> : connectedStores.length > 0 && <ChannelsCard cur={cur} channels={buildChannels([], { connected: connectedStores, windowDays: d.windowDays, endDate: d.endDate })} />}
       <ProductsOverview rows={prodRows} cur={cur} stores={connectedStores} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,340px),1fr))", gap: 24 }}>
         <Card>
           <h2 className="h2"><span className="n">01</span>Revenue vs spend</h2>
           <RevenueChart series={d.series} />

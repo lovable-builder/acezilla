@@ -43,7 +43,7 @@ export default async function GoogleAccounts({ searchParams }: { searchParams: P
         ))}
         {accounts.length === 0 && !loadError && <Card>No Google Ads accounts found for this login. Make sure the Google user can open an ad account in Google Ads.</Card>}
         {accounts.length > 0 && (
-          <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <label className="history-range" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <span className="eyebrow">History</span>
             <select name="range" defaultValue="730" className="field" style={{ padding: "8px 10px" }}>
               <option value="90">Last 90 days</option>

@@ -10,3 +10,6 @@ export * from "./allegro";
 export * from "./allegro-ads-report";
 export * from "./xlsx";
 export * from "./image-url";
+export * from "./ga4";
+export * from "./merchant";
+export * from "./searchconsole";

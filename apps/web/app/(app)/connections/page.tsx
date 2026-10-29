@@ -12,22 +12,28 @@ const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
 export default async function Connections({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { error, notice } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();
-  const [{ data: conns }, { data: accts }] = current
+  const [{ data: conns }, { data: accts }, { data: props }, { data: mAccts }, { data: sSites }] = current
     ? await Promise.all([
         supabase.from("connection").select("platform,last_sync_at,status,last_error,token_expires_at,external_user_id").eq("workspace_id", current.id),
         supabase.from("ad_account").select("platform,name").eq("workspace_id", current.id).order("name"),
+        supabase.from("analytics_property").select("name").eq("workspace_id", current.id).order("name"),
+        supabase.from("merchant_account").select("name").eq("workspace_id", current.id).order("name"),
+        supabase.from("search_site").select("name").eq("workspace_id", current.id).order("name"),
       ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const conn = (p: string) => conns?.find((c) => c.platform === p);
   const names = (p: string) => (accts ?? []).filter((a) => a.platform === p).map((a) => a.name as string);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
   const woo = conn("woocommerce");
   const allegro = conn("allegro");
+  const ga4 = conn("ga4");
+  const merchant = conn("merchant");
+  const searchc = conn("searchconsole");
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   const adsOn = ["meta", "google", "tiktok"].filter((p) => conn(p));
   const storesOn = ["woocommerce", "allegro", "shopify"].filter((p) => conn(p));
-  const LABEL: Record<string, string> = { meta: "Meta", google: "Google", tiktok: "TikTok", woocommerce: "WooCommerce", allegro: "Allegro", shopify: "Shopify" };
+  const LABEL: Record<string, string> = { meta: "Meta", google: "Google", tiktok: "TikTok", woocommerce: "WooCommerce", allegro: "Allegro", ga4: "Google Analytics", merchant: "Google Merchant Center", searchconsole: "Google Search Console", shopify: "Shopify" };
   const list = (ids: string[]) => ids.map((i) => LABEL[i]).join(", ");
   const verdict = adsOn.length && storesOn.length ? { ok: true, text: `Real ROAS is on. ${list(adsOn)} spend is compared with orders from ${list(storesOn)}.` }
     : adsOn.length ? { ok: false, text: `${list(adsOn)} connected. Add a store to see what your ads really earn.` }
@@ -74,7 +80,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
         </Card>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 24, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))", gap: 24, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
           <Section n="1" title="Ad platforms" feeds="Feeds: spend, clicks, conversions and the ROAS each platform reports.">
             {(["meta", "google"] as const).map((id) => {
@@ -138,6 +144,57 @@ export default async function Connections({ searchParams }: { searchParams: Prom
             <Connector
               logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for real ROAS"
               connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
+            />
+          </Section>
+
+          <Section n="3" title="Analytics" feeds="Feeds: on-site sessions and conversions, and the words people searched on Google. Optional.">
+            <Connector
+              logo={<BrandLogo brand="ga4" />} name="Google Analytics 4" desc="Sessions and on-site conversions"
+              connected={!!ga4} lastSync={ga4?.last_sync_at as string | undefined} accounts={(props ?? []).map((p) => p.name as string)} accountWord="property"
+              problem={ga4?.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : ga4?.status === "error" ? `Sync failed: ${ga4.last_error ?? "unknown error"}` : undefined}
+              action={
+                ga4 ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {ga4.status === "needs_reauth" ? <Button asChild><a href="/api/connect/ga4/start">Reconnect</a></Button> : null}
+                    <form action={syncNow}><input type="hidden" name="platform" value="ga4" /><Button variant="ghost">Sync now</Button></form>
+                    <Button asChild variant="outline"><Link href="/connections/ga4">Choose properties</Link></Button>
+                  </div>
+                ) : googleReady ? <Button asChild><a href="/api/connect/ga4/start">Connect Google Analytics</a></Button>
+                : <Button variant="outline" disabled title="Add the Google secrets">Not configured</Button>
+              }
+            />
+            <Connector
+              logo={<BrandLogo brand="searchconsole" />} name="Google Search Console" desc="The words people searched on Google before reaching your website"
+              connected={!!searchc} lastSync={searchc?.last_sync_at as string | undefined} accounts={(sSites ?? []).map((a) => a.name as string)} accountWord="website"
+              problem={searchc?.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : searchc?.status === "error" ? `Sync failed: ${searchc.last_error ?? "unknown error"}` : undefined}
+              action={
+                searchc ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {searchc.status === "needs_reauth" ? <Button asChild><a href="/api/connect/searchconsole/start">Reconnect</a></Button> : null}
+                    <form action={syncNow}><input type="hidden" name="platform" value="searchconsole" /><Button variant="ghost">Sync now</Button></form>
+                    <Button asChild variant="outline"><Link href="/connections/searchconsole">Choose websites</Link></Button>
+                  </div>
+                ) : googleReady ? <Button asChild><a href="/api/connect/searchconsole/start">Connect Search Console</a></Button>
+                : <Button variant="outline" disabled title="Add the Google secrets">Not configured</Button>
+              }
+            />
+          </Section>
+
+          <Section n="4" title="Product feed" feeds="Feeds: which products Google Shopping shows or blocks, and clicks from free listings and ads. Optional.">
+            <Connector
+              logo={<BrandLogo brand="merchant" />} name="Google Merchant Center" desc="Product approval status and Shopping traffic"
+              connected={!!merchant} lastSync={merchant?.last_sync_at as string | undefined} accounts={(mAccts ?? []).map((a) => a.name as string)} accountWord="account"
+              problem={merchant?.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : merchant?.status === "error" ? `Sync failed: ${merchant.last_error ?? "unknown error"}` : undefined}
+              action={
+                merchant ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {merchant.status === "needs_reauth" ? <Button asChild><a href="/api/connect/merchant/start">Reconnect</a></Button> : null}
+                    <form action={syncNow}><input type="hidden" name="platform" value="merchant" /><Button variant="ghost">Sync now</Button></form>
+                    <Button asChild variant="outline"><Link href="/connections/merchant">Choose accounts</Link></Button>
+                  </div>
+                ) : googleReady ? <Button asChild><a href="/api/connect/merchant/start">Connect Merchant Center</a></Button>
+                : <Button variant="outline" disabled title="Add the Google secrets">Not configured</Button>
+              }
             />
           </Section>
         </div>

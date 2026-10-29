@@ -12,5 +12,6 @@ export async function GET(req: Request) {
   const state = randomBytes(24).toString("hex");
   const res = NextResponse.redirect(googleAuthUrl({ clientId: process.env.GOOGLE_CLIENT_ID, redirectUri: `${origin}/api/connect/google/callback`, state }));
   res.cookies.set("az_google_state", state, { httpOnly: true, sameSite: "lax", maxAge: 600, path: "/api/connect/google" });
+  res.cookies.delete({ name: "az_google_kind", path: "/api/connect/google" });
   return res;
 }

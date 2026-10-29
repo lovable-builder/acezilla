@@ -4,6 +4,7 @@ import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AutoRefresh } from "@/components/seo/auto-refresh";
+import { SearchWordsPanel } from "@/components/seo/search-words-panel";
 import { ago } from "@/lib/format";
 import { LIMITS } from "@/lib/seo-runner";
 import { addSite } from "./actions";
@@ -37,6 +38,7 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
       </div>
       {error && <Card style={{ color: "var(--neg)" }}>{error}</Card>}
       {notice && <Card style={{ color: "var(--pos)" }}>{notice}</Card>}
+      {current && <SearchWordsPanel supabase={supabase} workspaceId={current.id} />}
 
       <Card>
         <form action={addSite} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>

@@ -4,7 +4,7 @@ export interface MetaOptions { accessToken: string; version?: string; fetch?: ty
 export interface MetaAdAccount { id: string; name: string; currency: string; status: number }
 
 export class MetaApiError extends Error {
-  constructor(message: string, readonly code?: number, readonly retryable = false) { super(message); }
+  constructor(message: string, readonly code?: number, readonly retryable = false, readonly subcode?: number) { super(message); }
 }
 
 const RATE_LIMIT_CODES = new Set([4, 17, 32, 613, 80000, 80003, 80004]);
@@ -24,7 +24,7 @@ async function* getPages<T>(o: MetaOptions, path: string, params: Record<string,
       const code: number | undefined = json.error?.code;
       const retryable = (code !== undefined && RATE_LIMIT_CODES.has(code)) || res.status === 429 || res.status >= 500;
       if (retryable && attempt < (o.maxRetries ?? 3)) { await sleep(2 ** attempt * 1000); continue; }
-      throw new MetaApiError(json.error?.message ?? `Meta API HTTP ${res.status}`, code, retryable);
+      throw new MetaApiError(json.error?.message ?? `Meta API HTTP ${res.status}`, code, retryable, json.error?.error_subcode);
     }
     for (const row of json.data ?? []) yield row as T;
     url = json.paging?.next;
@@ -92,4 +92,38 @@ export async function exchangeMetaCode(p: { appId: string; appSecret: string; re
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok || json.error || !json.access_token) throw new MetaApiError(json.error?.message ?? "Could not exchange the Meta login code", json.error?.code);
   return { accessToken: String(json.access_token), expiresInSec: json.expires_in ? Number(json.expires_in) : null };
+}
+
+// ---- Ad Library (public ads of other advertisers; read-only) ----
+export interface MetaLibraryAd { id: string; pageName: string; startedOn: string | null; endedOn: string | null; text: string; headline: string; reach: number | null }
+
+const day = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
+const LIBRARY_FIELDS = "id,page_name,ad_delivery_start_time,ad_delivery_stop_time,ad_creative_bodies,ad_creative_link_titles,eu_total_reach";
+
+/** Meta's identity and terms step for the Ad Library API is per Facebook account, separate from having an app. */
+const NOT_APPROVED = "Meta has not approved your Facebook account for the Ad Library API yet. Finish the steps at facebook.com/ads/library/api, wait for Meta to confirm, then try again.";
+
+/**
+ * Public ads that reached a country (EU ads come with start and stop dates). Searches by words, so the caller keeps only the ads of the right page.
+ * We read the ad ID and build our own library link: Meta's own snapshot link carries the access token, which must never be stored.
+ */
+export async function fetchMetaLibraryAds(o: MetaOptions, p: { search: string; country: string; maxAds?: number }): Promise<MetaLibraryAd[]> {
+  const max = p.maxAds ?? 200, out: MetaLibraryAd[] = [];
+  try {
+    for await (const r of getPages<any>(o, "ads_archive", {
+      search_terms: p.search, ad_type: "ALL", ad_reached_countries: JSON.stringify([p.country]), ad_active_status: "ALL", fields: LIBRARY_FIELDS, limit: "50",
+    })) {
+      if (!r.id) continue;
+      out.push({
+        id: String(r.id), pageName: String(r.page_name ?? ""), startedOn: day(r.ad_delivery_start_time), endedOn: day(r.ad_delivery_stop_time),
+        text: String(r.ad_creative_bodies?.[0] ?? ""), headline: String(r.ad_creative_link_titles?.[0] ?? ""),
+        reach: Number.isFinite(Number(r.eu_total_reach)) && r.eu_total_reach !== undefined ? Number(r.eu_total_reach) : null,
+      });
+      if (out.length >= max) break;
+    }
+  } catch (e) {
+    if (e instanceof MetaApiError && e.code === 10 && (e.subcode === 2332002 || e.subcode === 2332004)) throw new MetaApiError(NOT_APPROVED, e.code, false, e.subcode);
+    throw e;
+  }
+  return out;
 }

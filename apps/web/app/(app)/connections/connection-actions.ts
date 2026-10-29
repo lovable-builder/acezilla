@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revokeAtPlatform, syncConnection, type ConnRow } from "@/lib/sync";
 import { requireWriter } from "@/lib/workspace";
 
-const PLATFORMS = ["meta", "google", "woocommerce", "allegro"];
-const LABEL: Record<string, string> = { meta: "Meta", google: "Google Ads", woocommerce: "WooCommerce", allegro: "Allegro" };
+const PLATFORMS = ["meta", "google", "ga4", "merchant", "searchconsole", "woocommerce", "allegro"];
+const LABEL: Record<string, string> = { meta: "Meta", google: "Google Ads", ga4: "Google Analytics", merchant: "Google Merchant Center", searchconsole: "Google Search Console", woocommerce: "WooCommerce", allegro: "Allegro" };
 const go = (qs: string) => redirect(`/connections?${qs}`);
 
 async function load(platform: string) {
