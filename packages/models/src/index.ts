@@ -16,3 +16,4 @@ export * from "./competitor";
 export * from "./feed";
 export * from "./search";
 export * from "./strategy";
+export * from "./vat";

@@ -2,13 +2,13 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
-export interface Workspace { id: string; name: string; currency: string }
+export interface Workspace { id: string; name: string; currency: string; country: string }
 export const WS_COOKIE = "az_ws";
 
 /** Workspaces visible to the signed-in user (RLS does the filtering) and the active one. Cached per request so the layout and page share one set of queries. */
 export const getWorkspaceContext = cache(async () => {
   const supabase = await createClient();
-  const { data } = await supabase.from("workspace").select("id,name,currency").order("created_at");
+  const { data } = await supabase.from("workspace").select("id,name,currency,country").order("created_at");
   const workspaces = (data ?? []) as Workspace[];
   const saved = (await cookies()).get(WS_COOKIE)?.value;
   const current = workspaces.find((w) => w.id === saved) ?? workspaces[0] ?? null;

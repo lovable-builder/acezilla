@@ -1,4 +1,5 @@
-import { allocateBudget, buildAttribution, buildDashboard, fitResponse, forecastFlight, marginalRoas, shiftDate, weeklyPoints, MIN_WEEKS, type Flight, type ResponseFit } from "@acezilla/models";
+import Link from "next/link";
+import { targets, allocateBudget, buildAttribution, buildDashboard, fitResponse, forecastFlight, marginalRoas, shiftDate, weeklyPoints, MIN_WEEKS, type Flight, type ResponseFit } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { loadAdRows, loadOrders, todayUtc } from "@/lib/data";
 import { Card } from "@/components/ui/card";
@@ -39,6 +40,9 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
   const attr = d ? buildAttribution({ platforms: d.platforms, campaigns: d.campaigns, orders }) : null;
   const chan = new Map((attr?.channels ?? []).map((c) => [c.platform, c]));
 
+  // The seller's own break-even, once a margin is saved in the Strategy map, so every platform is read against the same line.
+  const { data: planRow } = await supabase.from("strategy_plan").select("margin,cushion").eq("workspace_id", current.id).maybeSingle();
+  const tg = targets(planRow?.margin == null ? 0 : Number(planRow.margin), Number(planRow?.cushion ?? 0.2), 0);
   const weeklyNow = Object.values(current4w).reduce((s, v) => s + v, 0);
   const asked = Number(budgetParam);
   const weeklyBudget = Number.isFinite(asked) && asked > 0 ? asked : Math.round(weeklyNow);
@@ -79,7 +83,7 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
                       <tr key={p}>
                         <td style={{ textAlign: "left" }}><b style={{ fontWeight: 600 }}>{PLATFORM[p]?.label ?? p}</b></td>
                         <td className="tabnum">{money(current4w[p]!, cur)}</td>
-                        <td className="tabnum">{x(c?.platformRoas ?? null)}</td>
+                        <td className="tabnum">{x(c?.platformRoas ?? null)}{tg.breakEvenRoas !== null && c?.platformRoas != null && c.platformRoas < tg.breakEvenRoas && <span className="seo-chip seo-chip-missing" style={{ marginLeft: 6 }} title={`Your break-even is ${tg.breakEvenRoas.toFixed(2)}x`}>Below break-even</span>}</td>
                         <td className="tabnum">{x(c?.storeRoas ?? null)}</td>
                         <td className="tabnum">{mr === null ? "—" : x(mr)}</td>
                         <td className="tabnum">{r ? <b style={{ color: r.suggested > r.current * 1.02 ? "var(--pos)" : r.suggested < r.current * 0.98 ? "var(--warn)" : undefined }}>{money(r.suggested, cur)}</b> : f ? "—" : <span className="sub">Not enough weeks yet</span>}</td>
@@ -105,7 +109,7 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
             ) : (
               <p className="sub" style={{ margin: 0, fontSize: 13 }}>A suggested split needs at least two platforms with {MIN_WEEKS}+ weeks of spend that changed from week to week. Until then acezilla shows what it knows and does not guess.</p>
             )}
-            <p className="sub" style={{ margin: 0, fontSize: 12 }}>Revenue here is what each platform reports, because that is the only revenue we can tie to spend week by week. Store ROAS is what your store&apos;s own orders confirm. No platform moves more than 50% from today&apos;s spend in one suggestion, since the curve is only known near the spend it was learned from.</p>
+            <p className="sub" style={{ margin: 0, fontSize: 12 }}>{tg.breakEvenRoas !== null ? <>Your break-even return is <b className="tabnum">{tg.breakEvenRoas.toFixed(2)}x</b> (from your margin in the Strategy map). </> : <><Link href="/strategy" style={{ color: "var(--accent-ink)" }}>Save your margin in the Strategy map</Link> to see which platforms are below break-even. </>}Revenue here is what each platform reports, because that is the only revenue we can tie to spend week by week. Modeled ROAS is what your store&apos;s own orders confirm. No platform moves more than 50% from today&apos;s spend in one suggestion, since the curve is only known near the spend it was learned from.</p>
           </>
         )}
       </Card>

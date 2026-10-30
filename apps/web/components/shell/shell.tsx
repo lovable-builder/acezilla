@@ -3,7 +3,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { NAV } from "./nav";
+import { NAV, itemFor } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -38,12 +38,11 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
             <div key={g.label}>
               <div className="nav-label">{g.label}</div>
               {g.items.map((i) => {
-                const active = path.startsWith(i.href);
+                const active = itemFor(path)?.href === i.href;
                 return (
                   <Link key={i.href} href={i.href} className={`nav-item${active ? " active" : ""}`}>
                     {active && <span className="nav-dot" />}
                     {i.name}
-                    {"soon" in i && i.soon && <span className="nav-soon">Soon</span>}
                   </Link>
                 );
               })}
@@ -66,7 +65,21 @@ export function Shell({ children, workspaces, currentId, syncLabel, email }: Pro
           {email && <span className="eyebrow" title="Signed in as">{email}</span>}
           <form action="/auth/signout" method="post"><button className="link">Sign out</button></form>
         </header>
-        <main className="content">{children}</main>
+        <main className="content">
+          {(() => {
+            const tabs = itemFor(path)?.tabs;
+            if (!tabs || tabs.length < 2) return null;
+            return (
+              <nav aria-label="Pages in this section" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {tabs.map((t) => {
+                  const on = path === t.href || path.startsWith(`${t.href}/`);
+                  return <Link key={t.href} href={t.href} aria-current={on ? "page" : undefined} style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, textDecoration: "none", border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent-soft)" : "transparent", color: on ? "var(--accent-ink)" : "var(--ink2)", fontWeight: on ? 600 : 400, transition: "background 150ms ease-out, border-color 150ms ease-out" }}>{t.name}</Link>;
+                })}
+              </nav>
+            );
+          })()}
+          {children}
+        </main>
       </div>
     </div>
   );

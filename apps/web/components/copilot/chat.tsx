@@ -10,9 +10,9 @@ const ICON = {
   route: <path d="M5 19a2 2 0 100-4 2 2 0 000 4zM19 9a2 2 0 100-4 2 2 0 000 4zM7 17h6a3 3 0 000-6h-2a3 3 0 010-6h6" />,
   spark: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z" />,
 };
-const STARTERS: { q: string; label: string; hint: string; icon: keyof typeof ICON }[] = [
+const STARTERS: { q: string; label: string; hint: string; icon: keyof typeof ICON; needs?: string }[] = [
   { q: "How did the last 30 days go?", label: "Recap my month", hint: "Spend, sales and what changed", icon: "trend" },
-  { q: "Which Allegro offers lose money?", label: "Find money-losers", hint: "Offers below break-even", icon: "coin" },
+  { q: "Which Allegro offers lose money?", label: "Find money-losers", hint: "Offers below break-even", icon: "coin", needs: "Allegro" },
   { q: "Where do my orders come from?", label: "Trace my orders", hint: "Channels and marketing sources", icon: "route" },
   { q: "What should I look at first this week?", label: "Pick my priorities", hint: "The one thing to act on", icon: "spark" },
 ];
@@ -61,7 +61,7 @@ export function CopilotChat({ sources }: { sources: string[] }) {
 
       {msgs.length === 0 && (
         <div className="cp-starters">
-          {STARTERS.map((s, i) => (
+          {STARTERS.filter((s) => !s.needs || sources.includes(s.needs)).map((s, i) => (
             <button key={s.q} type="button" className="cp-starter raise3d rise" style={{ "--i": i } as React.CSSProperties} onClick={() => ask(s.q)}>
               <span className="ic"><Svg>{ICON[s.icon]}</Svg></span>
               <b style={{ fontWeight: 600 }}>{s.label}</b>

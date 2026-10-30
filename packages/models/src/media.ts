@@ -144,6 +144,13 @@ export type AdviceKind = "stop" | "scale" | "watch" | "too_early" | "restore" | 
 export interface Advice { kind: AdviceKind; label: string; reason: string }
 export const ROAS_GOOD = 2, ROAS_SCALE = 2.5, ROAS_LOSING = 1, SCALE_STEP = 0.2;
 
+/** Where "losing", "fine" and "scale" begin. By default fixed numbers; once the seller has saved a margin they are that seller's own break-even and target. */
+export interface RoasThresholds { losing: number; good: number; scale: number; basis: "default" | "yours" }
+export const DEFAULT_THRESHOLDS: RoasThresholds = { losing: ROAS_LOSING, good: ROAS_GOOD, scale: ROAS_SCALE, basis: "default" };
+/** Break-even is where a sale stops losing money, so it is both the line below which a campaign loses and the start of "fine". */
+export const thresholdsFrom = (t: { breakEvenRoas: number | null; targetRoas: number | null }): RoasThresholds =>
+  t.breakEvenRoas === null || t.targetRoas === null ? DEFAULT_THRESHOLDS : { losing: t.breakEvenRoas, good: t.breakEvenRoas, scale: t.targetRoas, basis: "yours" };
+
 /** A campaign has to spend this much (in US dollars) before there is enough to judge it. */
 export const MIN_SPEND_TO_JUDGE_USD = 5;
 export const minSpendToJudge = (currency: string) => roundUp(MIN_SPEND_TO_JUDGE_USD * (PER_USD[currency.toUpperCase()] ?? 1));
@@ -152,31 +159,32 @@ export const minSpendToJudge = (currency: string) => roundUp(MIN_SPEND_TO_JUDGE_
  * The advice for one campaign over the period: stop what loses money, wait on what has not spent enough, scale what clearly
  * earns, and offer to bring back a paused campaign that used to earn. The numbers are the platform's own, so treat ROAS as a signal.
  */
-export function adviseCampaign(c: { status: string; spend: number; roas: number | null; stock?: StockLevel }, o: { currency: string; minSpend?: number }): Advice {
+export function adviseCampaign(c: { status: string; spend: number; roas: number | null; stock?: StockLevel }, o: { currency: string; minSpend?: number; thresholds?: RoasThresholds }): Advice {
+  const th = o.thresholds ?? DEFAULT_THRESHOLDS;
   const min = o.minSpend ?? minSpendToJudge(o.currency);
   const active = c.status.toLowerCase() === "active";
   const enough = c.spend >= min;
   const roas = c.roas ?? 0;
   if (!active) {
-    return enough && roas >= ROAS_SCALE && c.stock !== "out" && c.stock !== "low"
+    return enough && roas >= th.scale && c.stock !== "out" && c.stock !== "low"
       ? { kind: "restore", label: "Bring back?", reason: `It is paused, but it earned ${roas.toFixed(1)}x on ${Math.round(c.spend)} spent.` }
       : { kind: "paused", label: "Paused", reason: "Paused, and nothing suggests restarting it." };
   }
   if (c.stock === "out") return { kind: "stop", label: "Stop", reason: "Its product is out of stock, so the ad would send shoppers to something they cannot buy. Pause it until you restock." };
   if (!enough) return { kind: "too_early", label: "Too early", reason: `Only ${Math.round(c.spend)} spent so far. Give it more before deciding.` };
-  if (roas < ROAS_LOSING) return { kind: "stop", label: "Stop", reason: `It returns ${roas.toFixed(1)}x, so it loses money on what the platform reports.` };
-  if (roas >= ROAS_SCALE && c.stock === "low") return { kind: "watch", label: "Watch", reason: `It returns ${roas.toFixed(1)}x, but only a few units are left. Restock before you raise the budget.` };
-  if (roas >= ROAS_SCALE) return { kind: "scale", label: `Scale +${SCALE_STEP * 100}%`, reason: `It returns ${roas.toFixed(1)}x. Raise the daily budget by about ${SCALE_STEP * 100}% and watch it.` };
+  if (roas < th.losing) return { kind: "stop", label: "Stop", reason: th.basis === "yours" ? `It returns ${roas.toFixed(1)}x, below your break-even of ${th.losing.toFixed(1)}x, so each sale loses money after your costs.` : `It returns ${roas.toFixed(1)}x, so it loses money on what the platform reports.` };
+  if (roas >= th.scale && c.stock === "low") return { kind: "watch", label: "Watch", reason: `It returns ${roas.toFixed(1)}x, but only a few units are left. Restock before you raise the budget.` };
+  if (roas >= th.scale) return { kind: "scale", label: `Scale +${SCALE_STEP * 100}%`, reason: `It returns ${roas.toFixed(1)}x. Raise the daily budget by about ${SCALE_STEP * 100}% and watch it.` };
   return { kind: "watch", label: "Watch", reason: `It returns ${roas.toFixed(1)}x. Not clearly losing, not clearly winning.` };
 }
 
 /** The campaigns that need a person today, biggest spenders first. Campaigns to watch or wait on are left out. */
-export function todaysDecisions<T extends { name: string; status: string; spend: number; roas: number | null; stock?: StockLevel }>(cs: T[], o: { currency: string; limit?: number }): { campaign: T; advice: Advice }[] {
+export function todaysDecisions<T extends { name: string; status: string; spend: number; roas: number | null; stock?: StockLevel }>(cs: T[], o: { currency: string; limit?: number; thresholds?: RoasThresholds }): { campaign: T; advice: Advice }[] {
   return cs.map((campaign) => ({ campaign, advice: adviseCampaign(campaign, o) }))
     .filter((x) => x.advice.kind === "stop" || x.advice.kind === "scale" || x.advice.kind === "restore")
     .sort((a, b) => b.campaign.spend - a.campaign.spend).slice(0, o.limit ?? 8);
 }
-export const roasTone = (roas: number | null): "good" | "ok" | "bad" | "none" => (roas === null ? "none" : roas >= ROAS_GOOD ? "good" : roas >= ROAS_LOSING ? "ok" : "bad");
+export const roasTone = (roas: number | null, th: RoasThresholds = DEFAULT_THRESHOLDS): "good" | "ok" | "bad" | "none" => (roas === null ? "none" : roas >= th.good ? "good" : roas >= th.losing ? "ok" : "bad");
 
 // ---------------- creative files (images and video) ----------------
 

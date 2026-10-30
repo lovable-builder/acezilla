@@ -1,7 +1,9 @@
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { createWorkspace, updateWorkspace } from "./actions";
+import { createWorkspace, deleteWorkspace, updateWorkspace } from "./actions";
+
+const COUNTRIES: [string, string][] = [["PL", "Poland"], ["DE", "Germany"], ["CZ", "Czechia"], ["SK", "Slovakia"], ["HU", "Hungary"], ["RO", "Romania"], ["LT", "Lithuania"], ["GB", "United Kingdom"], ["FR", "France"], ["ES", "Spain"], ["IT", "Italy"], ["NL", "Netherlands"], ["SE", "Sweden"], ["US", "United States"], ["EG", "Egypt"], ["AE", "United Arab Emirates"], ["SA", "Saudi Arabia"]];
 
 const CURRENCIES = ["USD", "EUR", "GBP", "PLN", "EGP", "AED", "SAR", "CAD", "AUD", "CHF", "SEK", "NOK", "DKK", "CZK", "HUF", "RON", "TRY", "INR", "JPY", "BRL", "MXN", "ZAR"];
 
@@ -31,6 +33,9 @@ export default async function Workspaces({ searchParams }: { searchParams: Promi
           <input id="ws-name" name="name" className="field" defaultValue={current.name} minLength={2} maxLength={60} required />
           <label className="eyebrow" htmlFor="ws-cur">Currency</label>
           <CurrencySelect value={current.currency} />
+          <label className="eyebrow" htmlFor="ws-country">Country you sell in</label>
+          <select id="ws-country" name="country" className="field" defaultValue={current.country}>{(COUNTRIES.some(([c]) => c === current.country) ? COUNTRIES : [[current.country, current.country] as [string, string], ...COUNTRIES]).map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select>
+          <div className="sub" style={{ margin: 0, fontSize: 12 }}>Used to search the public ad libraries (Facebook, Google) for competitors in the right market.</div>
           <div className="sub" style={{ margin: 0, fontSize: 12 }}>All money in this workspace is shown in this currency. Pick the one your store and ad accounts use. Figures are not converted.</div>
           <div><Button>Save changes</Button></div>
         </form>
@@ -57,6 +62,15 @@ export default async function Workspaces({ searchParams }: { searchParams: Promi
           ))}
         </ul>
         <p className="sub" style={{ fontSize: 12, marginBottom: 0 }}>Switch between them with the Workspace menu in the sidebar.</p>
+      </Card>
+
+      <Card style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 560, borderColor: "var(--neg)" }}>
+        <b>Delete this workspace</b>
+        <p className="sub" style={{ margin: 0, fontSize: 13 }}>Permanently deletes <b>{current.name}</b>: its connections and stored logins, orders, ad data, plans, competitor notes and files. This cannot be undone. We ask the platforms to revoke access unless another workspace of yours still uses the same login. You always keep at least one workspace.</p>
+        <form action={deleteWorkspace} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="eyebrow">Type the workspace name to confirm</span><input name="confirm_name" className="field" autoComplete="off" required placeholder={current.name} /></label>
+          <Button variant="outline" style={{ color: "var(--neg)" }}>Delete workspace</Button>
+        </form>
       </Card>
     </>
   );

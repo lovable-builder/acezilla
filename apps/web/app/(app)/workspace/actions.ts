@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWorkspaceContext, WS_COOKIE } from "@/lib/workspace";
+import { revokeAtPlatform } from "@/lib/sync";
 
 const MAX_WORKSPACES_PER_ORG = 10;
 const back = (qs: string) => redirect(`/workspace?${qs}`);
@@ -31,6 +32,11 @@ const cleanCurrency = (v: FormDataEntryValue | null) => {
   try { new Intl.NumberFormat("en-US", { style: "currency", currency: c }); } catch { throw new Error(`${c} is not a currency we can display`); }
   return c;
 };
+const cleanCountry = (v: FormDataEntryValue | null) => {
+  const c = String(v ?? "PL").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) throw new Error("Choose a country");
+  return c;
+};
 const fail = (e: unknown) => back(`error=${encodeURIComponent(e instanceof Error ? e.message : "Something went wrong")}`);
 
 /** Renames the active workspace and sets its currency. */
@@ -38,8 +44,8 @@ export async function updateWorkspace(formData: FormData) {
   let notice: string;
   try {
     const { workspace } = await requireOrgAdmin();
-    const name = cleanName(formData.get("name")), currency = cleanCurrency(formData.get("currency"));
-    const { error } = await createAdminClient().from("workspace").update({ name, currency }).eq("id", workspace.id);
+    const name = cleanName(formData.get("name")), currency = cleanCurrency(formData.get("currency")), country = cleanCountry(formData.get("country"));
+    const { error } = await createAdminClient().from("workspace").update({ name, currency, country }).eq("id", workspace.id);
     if (error) throw new Error(error.message);
     notice = "Saved.";
   } catch (e) { return fail(e); }
@@ -63,4 +69,51 @@ export async function createWorkspace(formData: FormData) {
   (await cookies()).set(WS_COOKIE, id, { path: "/", httpOnly: true, sameSite: "lax" });
   revalidatePath("/", "layout");
   redirect("/connections?notice=" + encodeURIComponent("New workspace created. Connect its accounts below."));
+}
+
+const FAMILY: Record<string, string> = { meta: "meta", google: "google", ga4: "google", merchant: "google", searchconsole: "google", allegro: "allegro" };
+
+/** Removes every file stored for a workspace, however deep the folders go. */
+async function removeFiles(admin: ReturnType<typeof createAdminClient>, prefix: string, depth = 0): Promise<void> {
+  const { data } = await admin.storage.from("creatives").list(prefix, { limit: 1000 });
+  const files: string[] = [];
+  for (const f of data ?? []) {
+    if (f.id) files.push(`${prefix}/${f.name}`);
+    else if (depth < 4) await removeFiles(admin, `${prefix}/${f.name}`, depth + 1);
+  }
+  if (files.length) await admin.storage.from("creatives").remove(files);
+}
+
+/**
+ * Permanently deletes the active workspace and everything in it: connections, imported data, plans, competitor notes and files.
+ * It asks the platforms to revoke access only when no other workspace in the organization uses the same login family, because
+ * revoking a shared Google or Meta login would sign the other workspaces out. The last workspace can never be deleted.
+ */
+export async function deleteWorkspace(formData: FormData) {
+  let notice: string;
+  try {
+    const { workspace, orgId } = await requireOrgAdmin();
+    const typed = String(formData.get("confirm_name") ?? "").trim().toLowerCase();
+    if (typed !== workspace.name.trim().toLowerCase()) throw new Error("Type the workspace name exactly to confirm.");
+    const admin = createAdminClient();
+    const { data: siblings } = await admin.from("workspace").select("id").eq("org_id", orgId);
+    const others = (siblings ?? []).map((w) => w.id as string).filter((id) => id !== workspace.id);
+    if (others.length === 0) throw new Error("This is your only workspace. Create another one first, then delete this one.");
+
+    const { data: mine } = await admin.from("connection").select("platform,token_enc").eq("workspace_id", workspace.id);
+    const { data: theirs } = await admin.from("connection").select("platform").in("workspace_id", others);
+    const stillUsed = new Set((theirs ?? []).map((c) => FAMILY[c.platform as string]).filter(Boolean));
+    for (const c of mine ?? []) {
+      const fam = FAMILY[c.platform as string];
+      if (fam && !stillUsed.has(fam)) await revokeAtPlatform(c.platform as string, c.token_enc as string | null);
+    }
+    await removeFiles(admin, workspace.id).catch(() => undefined);
+    await admin.from("order").delete().eq("workspace_id", workspace.id);
+    const { error } = await admin.from("workspace").delete().eq("id", workspace.id);
+    if (error) throw new Error(error.message);
+    (await cookies()).set(WS_COOKIE, others[0]!, { path: "/", httpOnly: true, sameSite: "lax" });
+    notice = `Deleted "${workspace.name}" and everything in it.`;
+  } catch (e) { return fail(e); }
+  revalidatePath("/", "layout");
+  back(`notice=${encodeURIComponent(notice)}`);
 }

@@ -17,11 +17,11 @@ export function friendlyAiError(e: unknown): string {
   if (!(e instanceof LlmError)) { console.warn("[ai] unexpected error"); return "Something went wrong. Please try again."; }
   console.warn(`[ai] ${e.kind}${e.status ? ` ${e.status}` : ""}: ${e.message}`);
   switch (e.kind) {
-    case "billing": return "The AI account has no credit left. Add credit in Google Cloud, then try again.";
+    case "billing": return "The AI is temporarily unavailable. Nothing was lost, and your numbers are unaffected. Try again later.";
     case "quota": return "The AI service is busy. Try again in a minute.";
     case "blocked": return "The AI declined this request. Try rephrasing it.";
     case "invalid_output": return "The AI's answer could not be verified, so it was not shown. Try again.";
     case "timeout": case "unavailable": return "The AI service did not respond. Try again in a moment.";
-    default: return `The AI service is not set up correctly (code: ${e.kind}). Check the Vertex settings.`;
+    default: return "The AI is temporarily unavailable. Try again later.";
   }
 }

@@ -1,7 +1,7 @@
 # acezilla — project instructions for Claude Code
 
 - The design references are in `design_handoff_acezilla/`. Read `README.md` there before building any UI. Match its tokens, type scale and layouts exactly.
-- Stack and build order are in `BUILD_PLAN.md`. Follow the build order.
+- Stack and build order are in `design_handoff_acezilla/BUILD_PLAN.md`. Follow the build order.
 - **Suggest-only:** nothing may write to an ad platform without an approved `approval` row. Never bypass this.
 - **Platform code:** each platform's code lives in `packages/connectors/<platform>` behind the shared Connector interface.
 - **Components:** use shadcn/ui primitives, styled with the CSS variables from README (`--bg`, `--surface`, `--ink`, `--accent` and the rest). Do not use any other colours.

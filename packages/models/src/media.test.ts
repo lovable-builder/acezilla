@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adviseCampaign, budgetGuide, launchChecklist, matchProduct, MEDIA_SPECS, minSpendToJudge, roasTone, stockLevel, todaysDecisions } from "./media";
+import { adviseCampaign, thresholdsFrom, budgetGuide, launchChecklist, matchProduct, MEDIA_SPECS, minSpendToJudge, roasTone, stockLevel, todaysDecisions } from "./media";
 
 const C = { currency: "PLN" };
 
@@ -158,4 +158,22 @@ test("carousel cards: listing photos and uploads together make the cards, in ord
 test("with no uploaded files the creative checks do not claim the files are fine", () => {
   assert.deepEqual(creativeChecks("meta", "carousel", [], { cards: 3, cardImages: 3 }).map((c) => c.text), ["3 cards, each with a picture."]);
   assert.ok(creativeChecks("meta", "carousel", [img("a", 1080, 1080), img("b", 1080, 1080)], { cards: 2 }).some((c) => /ratio Meta shows well/.test(c.text)));
+});
+
+test("once a margin is saved, campaigns are judged against the seller's own break-even, not fixed numbers", () => {
+  const mine = thresholdsFrom({ breakEvenRoas: 5, targetRoas: 6 });          // a 20% margin
+  assert.equal(mine.basis, "yours");
+  const min = minSpendToJudge("PLN");
+  // 3x looks like a winner on fixed numbers, but loses money at a 20% margin.
+  assert.equal(adviseCampaign({ status: "active", spend: min, roas: 3 }, C).kind, "scale");
+  const a = adviseCampaign({ status: "active", spend: min, roas: 3 }, { ...C, thresholds: mine });
+  assert.equal(a.kind, "stop");
+  assert.match(a.reason, /break-even of 5\.0x/);
+  // 2.6x scales on fixed numbers, but not at a 20% margin.
+  assert.equal(adviseCampaign({ status: "active", spend: min, roas: 2.6 }, C).kind, "scale");
+  assert.notEqual(adviseCampaign({ status: "active", spend: min, roas: 2.6 }, { ...C, thresholds: mine }).kind, "scale");
+  assert.equal(adviseCampaign({ status: "active", spend: min, roas: 6.5 }, { ...C, thresholds: mine }).kind, "scale");
+  assert.equal(roasTone(3, mine), "bad");
+  assert.equal(roasTone(5.5, mine), "good");
+  assert.equal(thresholdsFrom({ breakEvenRoas: null, targetRoas: null }).basis, "default");
 });

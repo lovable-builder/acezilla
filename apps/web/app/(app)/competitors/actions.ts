@@ -109,10 +109,10 @@ export async function importMetaAds(formData: FormData) {
     const { data: conn } = await admin.from("connection").select("token_enc,status").eq("workspace_id", workspace.id).eq("platform", "meta").maybeSingle();
     if (!conn?.token_enc || conn.status === "needs_reauth") throw new Error("Connect Meta on the Connections page first. The Ad Library is read with your Meta login.");
 
-    const found = await fetchMetaLibraryAds({ accessToken: decryptToken(conn.token_enc as string), version: process.env.META_GRAPH_VERSION }, { search: comp.name as string, country: "PL" });
+    const found = await fetchMetaLibraryAds({ accessToken: decryptToken(conn.token_enc as string), version: process.env.META_GRAPH_VERSION }, { search: comp.name as string, country: workspace.country });
     const ads = groupLibraryAds(found.filter((a) => a.pageName && pageMatches(a.pageName, comp.name as string)));
     if (!ads.length) {
-      notice = found.length ? `Meta returned ${found.length} ads for "${comp.name}", but none from a page with that name. Check the spelling of the name.` : `Meta has no ads for "${comp.name}" in Poland.`;
+      notice = found.length ? `Meta returned ${found.length} ads for "${comp.name}", but none from a page with that name. Check the spelling of the name.` : `Meta has no ads for "${comp.name}" in ${workspace.country}.`;
     } else {
       const { data: existing } = await admin.from("competitor_ad").select("external_id").eq("competitor_id", competitorId).not("external_id", "is", null);
       const known = new Set((existing ?? []).map((r) => r.external_id as string));

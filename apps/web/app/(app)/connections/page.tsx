@@ -12,15 +12,16 @@ const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
 export default async function Connections({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { error, notice } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();
-  const [{ data: conns }, { data: accts }, { data: props }, { data: mAccts }, { data: sSites }] = current
+  const [{ data: conns }, { data: accts }, { data: props }, { data: mAccts }, { data: sSites }, { data: camps }] = current
     ? await Promise.all([
         supabase.from("connection").select("platform,last_sync_at,status,last_error,token_expires_at,external_user_id").eq("workspace_id", current.id),
         supabase.from("ad_account").select("platform,name").eq("workspace_id", current.id).order("name"),
         supabase.from("analytics_property").select("name").eq("workspace_id", current.id).order("name"),
         supabase.from("merchant_account").select("name").eq("workspace_id", current.id).order("name"),
         supabase.from("search_site").select("name").eq("workspace_id", current.id).order("name"),
+        supabase.from("campaign").select("platform").eq("workspace_id", current.id).limit(5000),
       ])
-    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const conn = (p: string) => conns?.find((c) => c.platform === p);
   const names = (p: string) => (accts ?? []).filter((a) => a.platform === p).map((a) => a.name as string);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -33,9 +34,12 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const chosen: Record<string, number> = {
     meta: names("meta").length, google: names("google").length, ga4: (props ?? []).length, merchant: (mAccts ?? []).length, searchconsole: (sSites ?? []).length,
   };
+  // An ad account can be connected and synced yet hold no campaigns. That is not a problem with the connection, but it is not "real ROAS" either.
+  const campaignCount = (p: string) => (camps ?? []).filter((c) => c.platform === p).length;
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  const adsOn = ["meta", "google", "tiktok"].filter((p) => conn(p));
+  const adsOn = ["meta", "google", "tiktok"].filter((p) => conn(p) && (campaignCount(p) > 0));
+  const adsEmpty = ["meta", "google", "tiktok"].filter((p) => conn(p) && campaignCount(p) === 0 && (chosen[p] ?? 1) > 0);
   const storesOn = ["woocommerce", "allegro", "shopify"].filter((p) => conn(p));
   const LABEL: Record<string, string> = { meta: "Meta", google: "Google", tiktok: "TikTok", woocommerce: "WooCommerce", allegro: "Allegro", ga4: "Google Analytics", merchant: "Google Merchant Center", searchconsole: "Google Search Console", shopify: "Shopify" };
   const list = (ids: string[]) => ids.map((i) => LABEL[i]).join(", ");
@@ -43,6 +47,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
     : adsOn.length ? { ok: false, text: `${list(adsOn)} connected. Add a store to see what your ads really earn.` }
     : storesOn.length ? { ok: false, text: `${list(storesOn)} connected. Add an ad platform to see spend and real ROAS.` }
     : { ok: false, text: "Connect one ad platform and one store. That is all it takes to see real ROAS." };
+
+  const emptyNote = adsEmpty.length ? `${list(adsEmpty)} ${adsEmpty.length === 1 ? "is" : "are"} connected but ${adsEmpty.length === 1 ? "has" : "have"} no campaigns yet, so there is no ad spend to compare.` : null;
 
   return (
     <>
@@ -59,7 +65,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
           <Step n="1" title="Ad platforms" sub="Where the money goes" done={adsOn.length > 0} detail={adsOn.length ? list(adsOn) : "Not connected"} />
           <Step n="2" title="Store or marketplace" sub="What actually sold" done={storesOn.length > 0} detail={storesOn.length ? list(storesOn) : "Not connected"} />
         </div>
-        <div style={{ fontSize: 14, color: verdict.ok ? "var(--pos)" : "var(--ink2)", fontWeight: verdict.ok ? 600 : 400 }}>{verdict.text}</div>
+        <div style={{ fontSize: 14, color: verdict.ok ? "var(--pos)" : "var(--ink2)", fontWeight: verdict.ok ? 600 : 400 }}>{verdict.text}{emptyNote ? ` ${emptyNote}` : ""}</div>
       </Card>
 
       {(conns ?? []).length > 0 && (
@@ -89,6 +95,20 @@ export default async function Connections({ searchParams }: { searchParams: Prom
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))", gap: 24, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          {!(ga4 && merchant && searchc && conn("google")) && googleReady && (
+            <Card>
+              <b>Connect several Google services at once</b>
+              <p className="sub" style={{ fontSize: 13, margin: "4px 0 10px" }}>One Google login and one consent screen for everything you tick, instead of one for each. You still choose which account to read for each service afterwards.</p>
+              <form action="/api/connect/google/suite/start" method="get" style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                {([["ads", "Google Ads", !conn("google")], ["ga4", "Analytics", !ga4], ["searchconsole", "Search Console", !searchc], ["merchant", "Merchant Center", !merchant]] as const).map(([id, name, missing]) => (
+                  <label key={id} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 14, opacity: missing ? 1 : 0.55 }}>
+                    <input type="checkbox" name="s" value={id} defaultChecked={missing} style={{ accentColor: "var(--accent)" }} />{name}{missing ? "" : " (connected)"}
+                  </label>
+                ))}
+                <Button>Connect with Google</Button>
+              </form>
+            </Card>
+          )}
           <Section n="1" title="Ad platforms" feeds="Feeds: spend, clicks, conversions and the ROAS each platform reports.">
             {(["meta", "google"] as const).map((id) => {
               const c = conn(id);
@@ -104,7 +124,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
                   desc={id === "meta" ? "Facebook and Instagram campaigns" : "Search, Shopping and Performance Max"}
                   connected={!!c} lastSync={c?.last_sync_at as string | undefined} accounts={names(id)} accountWord="ad account"
                   problem={broken ? (c.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : `Sync failed: ${c.last_error ?? "unknown error"}`) : undefined}
-                  warning={!broken && daysLeft !== null && daysLeft <= 10 ? `Login expires in ${Math.max(daysLeft, 0)} day${daysLeft === 1 ? "" : "s"}. Reconnect to renew.` : undefined}
+                  warning={!broken && daysLeft !== null && daysLeft <= 10 ? `Login expires in ${Math.max(daysLeft, 0)} day${daysLeft === 1 ? "" : "s"}. Reconnect to renew.` : c && !broken && (chosen[id] ?? 0) > 0 && campaignCount(id) === 0 ? "Connected and read, but this account has no campaigns yet, so there is no ad spend to compare." : undefined}
                   action={
                     c ? (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { exchangeGoogleCode, fetchGoogleDataset, googleAuthUrl, GoogleApiError, listGoogleAdAccounts, refreshGoogleAccessToken } from "./google";
+import { exchangeGoogleCode, fetchGoogleDataset, googleAuthUrl, googleScopesAuthUrl, GoogleApiError, listGoogleAdAccounts, refreshGoogleAccessToken } from "./google";
 
 const ok = (b: unknown) => ({ ok: true, status: 200, json: async () => b }) as Response;
 const err = (status: number, b: unknown) => ({ ok: false, status, json: async () => b }) as Response;
@@ -83,4 +83,11 @@ test("explains why when every accessible account is unreadable", async () => {
     ? ok({ resourceNames: ["customers/3562281131"] })
     : err(403, { error: { message: "The caller does not have permission", details: [{ errors: [{ message: "The customer account can't be accessed because it is not yet enabled or has been deactivated." }] }] } }));
   await assert.rejects(listGoogleAdAccounts({ accessToken: "t", fetch: f }), /not yet enabled or has been deactivated/);
+});
+
+test("one consent screen can ask for several scopes, each separated by a space", () => {
+  const u = new URL(googleScopesAuthUrl({ clientId: "c", redirectUri: "https://x/cb", state: "s", scopes: ["https://a/one", "https://a/two"] }));
+  assert.equal(u.searchParams.get("scope"), "https://a/one https://a/two");
+  assert.equal(u.searchParams.get("access_type"), "offline");
+  assert.equal(u.searchParams.get("prompt"), "consent");
 });

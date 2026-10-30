@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildOfferProfit, buildProductList, type GaRow, type CatalogItem, type SoldLine, type AdStats, type DailyRow, type FeeRow, type LineRow, type OrderRow } from "@acezilla/models";
-import { shiftDate } from "@acezilla/models";
+import { netAdRows, netOfVat, shiftDate } from "@acezilla/models";
 
 const PAGE = 1000;
 export const todayUtc = () => new Date().toISOString().slice(0, 10);
@@ -23,10 +23,9 @@ export async function loadVatRate(supabase: SupabaseClient, workspaceId: string)
   const { data } = await supabase.from("marketplace_setting").select("vat_rate").eq("workspace_id", workspaceId).maybeSingle();
   return Number(data?.vat_rate ?? 0);
 }
-export const netOfVat = (rows: OrderRow[], vat: number): OrderRow[] => (vat > 0 ? rows.map((r) => (r.externalId?.startsWith("allegro:") ? { ...r, revenue: Math.round((r.revenue / (1 + vat)) * 100) / 100 } : r)) : rows);
+// The VAT helpers live in the models package, where they are tested. Re-exported so pages keep one import.
+export { netOfVat, netAdRows } from "@acezilla/models";
 
-/** Allegro ad charges are billed with VAT; take it off so they sit next to net Allegro sales and other platforms. */
-export const netAdRows = (rows: DailyRow[], vat: number): DailyRow[] => (vat > 0 ? rows.map((r) => (r.platform === "allegro" ? { ...r, spend: Math.round((r.spend / (1 + vat)) * 100) / 100 } : r)) : rows);
 
 export async function loadOrders(supabase: SupabaseClient, workspaceId: string, sinceDate: string, endDate?: string): Promise<OrderRow[]> {
   const out: OrderRow[] = [];

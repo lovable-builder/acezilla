@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { breakEven, CHANNEL_LABEL, CHANNEL_NOTE, compareChannels, contributionPerOrder, marginPerOrder, DESTINATIONS, NOT_OPEN_YET, expectedOutcome, histogram, sensitivity, simulateCampaign, unitEconomics, type CampaignInput, type CampaignOutcome, type ChannelFees, type SalesChannel } from "@acezilla/models";
 import { Card } from "@/components/ui/card";
@@ -172,7 +173,16 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
       </Card>
 
       {!sim || !input || !be || !avg ? (
-        <Card>Fill in the budget, cost per click, conversion rate, price and cost of goods to see the forecast.{feeVals ? "" : " One of the fee fields is not a valid number."}</Card>
+        <Card>
+          {(() => {
+            const missing = [!(budget > 0) && "the budget", !(cpc > 0) && "the cost per click", !(cvr > 0) && "the clicks-to-order rate", !(p > 0) && "the price", !Number.isFinite(cost) && "the cost of goods"].filter(Boolean) as string[];
+            return <>
+              {missing.length ? <>To see the forecast, fill in <b>{missing.join(", ")}</b>.</> : "To see the forecast, check the numbers above."}
+              {!Number.isFinite(cost) && <> No cost of goods is saved for this product yet: enter it under Profit per offer on the <Link href="/attribution" style={{ color: "var(--accent-ink)" }}>Attribution</Link> page, or type it here.</>}
+              {feeVals ? "" : " One of the fee fields is not a valid number."}
+            </>;
+          })()}
+        </Card>
       ) : (
         <>
           <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>

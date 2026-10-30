@@ -180,7 +180,7 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
                     <td style={{ textAlign: "left" }}><b style={{ fontWeight: 600 }}>{c.name}</b>{c.website && <> <a href={c.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--ink3)" }}>site</a></>}</td>
                     <td style={{ textAlign: "left" }}>{c.category || <span className="sub">—</span>}</td>
                     <td style={{ textAlign: "left", display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {(["meta", "tiktok", "google"] as const).map((s) => <a key={s} href={libraryLink(s, c.name, "PL", c.website)!} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "var(--accent-ink)" }}>{SOURCE_LABEL[s]}</a>)}
+                      {(["meta", "tiktok", "google"] as const).map((s) => <a key={s} href={libraryLink(s, c.name, current.country, c.website)!} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "var(--accent-ink)" }}>{SOURCE_LABEL[s]}</a>)}
                     </td>
                     <td className="tabnum">{all.filter((a) => a.competitorId === c.id).length}</td>
                     <td style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>

@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { adviseCampaign, roasTone, todaysDecisions, buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StockLevel, type StoreSales } from "@acezilla/models";
+import { adviseCampaign, roasTone, todaysDecisions, thresholdsFrom, targets, marginFromTotals, DEFAULT_THRESHOLDS, type RoasThresholds, buildAttribution, buildChannels, buildDashboard, buildInsights, buildStoreSales, shiftDate, storeRoas, type SalesChannelRow, type DailyRow, type OrderRow, type ProductRow, type StockLevel, type StoreSales } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RevenueChart, Sparkline } from "@/components/dash/charts";
 import { PeriodBar } from "@/components/dash/period-bar";
 import { parsePeriod, parseSavedView } from "@/lib/period";
-import { loadCampaignLinks, loadProducts, loadVatRate, netAdRows, netOfVat } from "@/lib/data";
+import { loadCampaignLinks, loadOfferProfit, loadProducts, loadVatRate, netAdRows, netOfVat } from "@/lib/data";
 import { resolveCampaignProducts } from "@/lib/campaign-products";
 import { linkCampaignProduct } from "./link-actions";
 import { Term } from "@/components/app/term";
+import { RememberVisit } from "@/components/app/last-visit";
 import { Checklist } from "@/components/app/checklist";
 import { ClaimedVsReal, CountUp, RoasGauge, SpendDonut } from "@/components/dash/gadgets";
 import { ago } from "@/lib/format";
@@ -60,8 +61,8 @@ function ProductsOverview({ rows, cur, stores }: { rows: ProductRow[]; cur: stri
 const ADVICE_CHIP: Record<string, string> = { stop: "missing", scale: "good", restore: "good", watch: "attention", too_early: "not_measured", paused: "not_measured" };
 
 /** The campaigns that need a person today. Suggestions only: acezilla never changes a live campaign. */
-function Decisions({ campaigns, cur }: { campaigns: { campaignId: string; name: string; platform: string; status: string; spend: number; roas: number | null; stock?: StockLevel; productName?: string }[]; cur: string }) {
-  const list = todaysDecisions(campaigns.filter((c) => c.platform !== "allegro").map((c) => ({ ...c })), { currency: cur });
+function Decisions({ campaigns, cur, th }: { th: RoasThresholds; campaigns: { campaignId: string; name: string; platform: string; status: string; spend: number; roas: number | null; stock?: StockLevel; productName?: string }[]; cur: string }) {
+  const list = todaysDecisions(campaigns.filter((c) => c.platform !== "allegro").map((c) => ({ ...c })), { currency: cur, thresholds: th });
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -231,12 +232,15 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     </Card>
   );
 
+  const { data: setupPlan } = await supabase.from("strategy_plan").select("margin").eq("workspace_id", current.id).maybeSingle();
+  const marginSet = setupPlan?.margin !== null && setupPlan?.margin !== undefined;
   const productsFor = async (end: string, days: number): Promise<ProductRow[]> => (connectedStores.length ? (await loadProducts(supabase, current.id, shiftDate(end, -(days - 1)), end)).rows : []);
   const checklist = (
     <Checklist steps={[
       { title: "Connect your store", hint: "WooCommerce or Allegro. This is how acezilla sees real orders.", done: storeConns.length > 0, href: "/connections", cta: "Connect a store" },
-      { title: "Connect an ad platform", hint: "Meta or Google Ads. This brings in your spend and campaigns.", done: adsConnected, href: "/connections", cta: "Connect ads" },
+      { title: "Connect an ad platform", hint: "Meta, Google Ads or Allegro Ads. This brings in your spend and campaigns.", done: adsConnected, href: "/connections", cta: "Connect ads" },
       { title: "Make sure the currency matches", hint: currencyWarning ?? "Your store and ad accounts should use the same currency.", done: !currencyWarning && (storeConns.length > 0 || adsConnected), href: "/connections/woocommerce", cta: "Fix currency" },
+      { title: "Save your margin", hint: "What you keep from each sale after goods, fees and shipping. Without it no ad return can be called good or bad.", done: marginSet, href: "/strategy#numbers", cta: "Set your margin" },
     ]} />
   );
 
@@ -313,6 +317,22 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const winStart = shiftDate(d.endDate, -(d.windowDays - 1));
   const inWindow = orderRows.filter((x) => x.createdAt.slice(0, 10) >= winStart && x.createdAt.slice(0, 10) <= d.endDate);
   const attr = buildAttribution({ platforms: d.platforms, campaigns: d.campaigns, orders: inWindow, nonReporting: ["allegro"] });
+  // What changed since this browser last opened the page. Only shown after at least six hours away and only when something moved.
+  const lastVisit = (await cookies()).get("az_last_visit")?.value;
+  const lastIso = lastVisit && !Number.isNaN(Date.parse(decodeURIComponent(lastVisit))) ? decodeURIComponent(lastVisit) : null;
+  const away = lastIso ? Date.now() - Date.parse(lastIso) : 0;
+  const sinceVisit = lastIso && away >= 6 * 3600000
+    ? { ago: ago(lastIso), orders: orderRows.filter((o) => o.createdAt > lastIso).length, revenue: orderRows.filter((o) => o.createdAt > lastIso).reduce((t, o) => t + o.revenue, 0), spend: rows.filter((r) => r.date > lastIso.slice(0, 10)).reduce((t, r) => t + r.spend, 0) }
+    : null;
+  // Judge campaigns against the seller's own break-even once a margin is saved; otherwise fall back to fixed numbers and say so.
+  const { data: planRow } = await supabase.from("strategy_plan").select("margin,cushion").eq("workspace_id", current.id).maybeSingle();
+  const savedMargin = planRow?.margin === null || planRow?.margin === undefined ? null : Number(planRow.margin);
+  const tg = targets(savedMargin ?? 0, Number(planRow?.cushion ?? 0.2), 0);
+  const th = thresholdsFrom(tg);
+  const ownProfit = connectedStores.includes("allegro") ? await loadOfferProfit(supabase, current.id, winStart, d.endDate) : null;
+  const ownMargin = ownProfit ? marginFromTotals(ownProfit.totals, ownProfit.missingCosts) : null;
+  const margin = savedMargin ?? ownMargin;
+  const marginSource = savedMargin !== null ? "the margin you saved in the Strategy map" : "your Allegro fees and the costs you entered";
   const { data: summaryRow } = await supabase.from("ai_summary").select("day,content").eq("workspace_id", current.id).eq("kind", "weekly").order("day", { ascending: false }).limit(1).maybeSingle();
   const summary = summaryRow && Date.now() - new Date(`${summaryRow.day}T00:00:00Z`).getTime() < 8 * 86400000 ? (summaryRow.content as { headline?: string; highlights?: string[]; watch?: string[]; nextSteps?: string[]; unverified?: string[]; error?: string }) : null;
   const prodRows = await productsFor(d.endDate, d.windowDays);
@@ -331,10 +351,21 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
             ? <>You spent {money(k.spend.value, cur)} on ads{store ? <> and your store made {money(store.revenue.value, cur)}{storeRoasNow !== null ? ` — ${x(storeRoasNow)} back for every 1 spent.` : "."}</> : "."}</>
             : <>You spent {money(k.spend.value, cur)} and made {money(k.revenue.value, cur)}
               {k.roas.deltaPct === null || !cmp
-                ? ` — blended ROAS is ${x(k.roas.value)}.`
+                ? ` — blended ROAS is ${x(k.roas.value)}${storeRoasNow !== null ? ` on platform figures and ${x(storeRoasNow)} on your store's orders` : ""}.`
                 : ` — ROAS is ${roasUp ? "up" : "down"} ${delta(k.roas.deltaPct).replace(/^[+−]/, "")} on the previous period.`}</>}
         </h1>
         <p className="sub">{!reporting ? "Allegro does not report revenue per ad, so your ads are judged against your real store sales." : store ? "Ad figures are platform-reported. Store sales are your real orders, so Store ROAS is the honest return on your ad spend." : "Platform-reported figures. Connect your store to compare them with real orders."}</p>
+        {storeRoasNow !== null && (margin === null
+          ? <p className="sub" style={{ fontSize: 13 }}>Sales are not profit. <Link href="/strategy" style={{ color: "var(--accent-ink)" }}>Set your margin in the Strategy map</Link> to see whether this return is enough to cover your costs.</p>
+          : margin <= 0
+            ? <p style={{ fontSize: 13, color: "var(--neg)", margin: 0 }}>Your costs are higher than your sales before any ad money is spent ({marginSource}). More sales will not fix that: check prices and costs on <Link href="/attribution" style={{ color: "var(--accent-ink)" }}>Attribution</Link>.</p>
+            : storeRoasNow < 1 / margin
+              ? <p style={{ fontSize: 13, color: "var(--neg)", margin: 0 }}>This return does not cover your costs. At a margin of {(margin * 100).toFixed(0)}% ({marginSource}), ads must bring back at least <b className="tabnum">{x(1 / margin)}</b> to break even, and you are at <b className="tabnum">{x(storeRoasNow)}</b>. See profit per offer on <Link href="/attribution" style={{ color: "var(--accent-ink)" }}>Attribution</Link>.</p>
+              : <p style={{ fontSize: 13, color: "var(--pos)", margin: 0 }}>This return covers your costs: break-even is <b className="tabnum">{x(1 / margin)}</b> at a margin of {(margin * 100).toFixed(0)}% ({marginSource}).</p>)}
+        {sinceVisit && (sinceVisit.orders > 0 || sinceVisit.spend > 0) && (
+          <p className="sub" style={{ fontSize: 13 }}><b style={{ fontWeight: 600, color: "var(--ink)" }}>Since you were last here ({sinceVisit.ago}):</b> {sinceVisit.orders} new {sinceVisit.orders === 1 ? "order" : "orders"}{sinceVisit.orders > 0 ? ` worth ${money(sinceVisit.revenue, cur)}` : ""}{sinceVisit.spend > 0 ? `, and ${money(sinceVisit.spend, cur)} spent on ads` : ""}.</p>
+        )}
+        <RememberVisit />
         {compare && !hasPrev && firstData && <p className="sub" style={{ fontSize: 13 }}>Changes against the previous period are hidden: your data starts on {firstData}, so the previous period is incomplete. Choose a shorter period to compare.</p>}
       </div>
       <Sources ads={d.platforms.map((p) => (p.platform === "allegro" ? "Allegro Ads" : PLATFORM[p.platform]?.label ?? p.platform))} stores={storeNames} />
@@ -379,7 +410,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         {!summary && <div className="sub" style={{ margin: 0 }}>A short, plain-language summary of the last 7 days written from your numbers. It is written when you ask, so opening this page never costs anything.</div>}
       </Card>
 
-      <Decisions campaigns={d.campaigns.map((c) => ({ ...c, stock: cp.get(c.campaignId)?.stock, productName: cp.get(c.campaignId)?.product.name }))} cur={cur} />
+      <Decisions campaigns={d.campaigns.map((c) => ({ ...c, stock: cp.get(c.campaignId)?.stock, productName: cp.get(c.campaignId)?.product.name }))} cur={cur} th={th} />
 
       <Card>
         <h2 className="h2"><span className="n">··</span>Insights</h2>
@@ -443,7 +474,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
                 <b style={{ fontWeight: 600 }}>{PLATFORM[p.platform]?.label ?? p.platform}</b>
               </div>
               <div className="tabnum" style={{ fontSize: 20, fontWeight: 600, marginTop: 6 }}>{money(p.spend, cur)}</div>
-              <div className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{p.platform === "allegro" ? "revenue per ad not reported" : `${x(p.roas)} platform · ${compact(p.revenue)} rev`}</div>
+              <div className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{p.platform === "allegro" ? "revenue per ad not reported" : `${x(p.roas)} platform${attr.channels.find((c) => c.platform === p.platform)?.storeRoas != null ? ` · ${x(attr.channels.find((c) => c.platform === p.platform)!.storeRoas)} modeled` : ""} · ${compact(p.revenue)} rev`}</div>
             </div>
           ))}
         </div>
@@ -458,7 +489,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
               <tr key={c.campaignId}>
                 <td><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 8, background: PLATFORM[c.platform]?.color }} />{c.name}</td>
                 <td>{money(c.spend, cur)}</td>
-                <td style={{ color: ({ good: "var(--pos)", ok: "var(--warn)", bad: "var(--neg)", none: "var(--ink3)" } as const)[roasTone(c.roas)], fontWeight: 600 }} title="Green from 2x, amber from 1x, red below 1x">{c.platform === "allegro" ? <span className="sub" style={{ fontSize: 12, fontWeight: 400 }}>not reported</span> : x(c.roas)}</td>
+                <td style={{ color: ({ good: "var(--pos)", ok: "var(--warn)", bad: "var(--neg)", none: "var(--ink3)" } as const)[roasTone(c.roas, th)], fontWeight: 600 }} title={th.basis === "yours" ? `Green from your break-even ${th.good.toFixed(1)}x, red below it` : "Green from 2x, amber from 1x, red below 1x. Save your margin in the Strategy map to judge against your own break-even."}>{c.platform === "allegro" ? <span className="sub" style={{ fontSize: 12, fontWeight: 400 }}>not reported</span> : x(c.roas)}</td>
                 {(() => { const m = attr.campaigns.get(c.campaignId); return <td style={{ fontWeight: 600 }} title={m ? `${m.orders} store orders tagged with this campaign` : "No store orders are tagged with this campaign's name (utm_campaign)"}>{m?.modeledRoas == null ? "—" : x(m.modeledRoas)}</td>; })()}
                 <td>{c.cpa === null ? "—" : money(c.cpa, cur)}</td>
                 <td style={{ color: c.status === "active" ? "var(--pos)" : "var(--ink3)" }}>{c.status}</td>
@@ -485,7 +516,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
                     </td>
                   );
                 })()}
-                {(() => { const a = c.platform === "allegro" ? null : adviseCampaign({ ...c, stock: cp.get(c.campaignId)?.stock }, { currency: cur }); return <td style={{ textAlign: "left" }} title={a?.reason}>{a ? <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`}>{a.label}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>}</td>; })()}
+                {(() => { const a = c.platform === "allegro" ? null : adviseCampaign({ ...c, stock: cp.get(c.campaignId)?.stock }, { currency: cur, thresholds: th }); return <td style={{ textAlign: "left" }} title={a?.reason}>{a ? <span className={`seo-chip seo-chip-${ADVICE_CHIP[a.kind]}`}>{a.label}</span> : <span className="sub" style={{ fontSize: 12 }}>—</span>}</td>; })()}
               </tr>
             ))}
           </tbody>

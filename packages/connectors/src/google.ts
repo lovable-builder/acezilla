@@ -22,6 +22,15 @@ export function googleAuthUrl(p: { clientId: string; redirectUri: string; state:
   return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
 }
 
+/** One Google consent screen for several services at once. The same login is then saved for each. */
+export function googleScopesAuthUrl(p: { clientId: string; redirectUri: string; state: string; scopes: string[] }) {
+  const q = new URLSearchParams({
+    client_id: p.clientId, redirect_uri: p.redirectUri, response_type: "code", scope: p.scopes.join(" "),
+    access_type: "offline", prompt: "consent", state: p.state,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}
+
 async function tokenCall(body: Record<string, string>, f: typeof fetch) {
   const res = await f("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
   const json: any = await res.json().catch(() => ({}));

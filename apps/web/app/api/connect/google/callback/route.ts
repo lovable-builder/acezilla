@@ -3,6 +3,7 @@ import { exchangeGoogleCode, GA4_SCOPE, GOOGLE_ADS_SCOPE, MERCHANT_SCOPE, SEARCH
 import { encryptToken } from "@/lib/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireWriter } from "@/lib/workspace";
+import { SUITE } from "@/lib/google-suite";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   if (!code) return fail("Google did not return a login code");
 
-  const kind = req.headers.get("cookie")?.match(/az_google_kind=(ga4|merchant|searchconsole)/)?.[1];
+  const kind = req.headers.get("cookie")?.match(/az_google_kind=(ga4|merchant|searchconsole|suite)/)?.[1];
   const platform = kind ?? "google";
   const scope = kind === "ga4" ? GA4_SCOPE : kind === "merchant" ? MERCHANT_SCOPE : kind === "searchconsole" ? SEARCH_CONSOLE_SCOPE : GOOGLE_ADS_SCOPE;
   try {
@@ -26,10 +27,21 @@ export async function GET(req: Request) {
       redirectUri: `${url.origin}/api/connect/google/callback`, code,
     });
     const admin = createAdminClient();
-    const row = { workspace_id: workspace.id, platform, scopes: [scope], status: "active", token_enc: encryptToken(refreshToken), token_expires_at: null };
-    const { data: existing } = await admin.from("connection").select("id").eq("workspace_id", workspace.id).eq("platform", platform).maybeSingle();
-    const { error } = existing ? await admin.from("connection").update(row).eq("id", existing.id) : await admin.from("connection").insert(row);
-    if (error) return fail(error.message);
+    // One login can serve several Google services. Each becomes its own connection, with the same stored login.
+    const services = kind === "suite" ? (req.headers.get("cookie")?.match(/az_google_services=([a-z0-9.]+)/)?.[1] ?? "").split(".").filter((x) => x in SUITE) : [];
+    const targets = kind === "suite" ? services.map((x) => SUITE[x]!) : [{ platform, scope, label: platform }];
+    if (targets.length === 0) return fail("No Google service was selected. Please try again.");
+    for (const t of targets) {
+      const row = { workspace_id: workspace.id, platform: t.platform, scopes: [t.scope], status: "active", token_enc: encryptToken(refreshToken), token_expires_at: null };
+      const { data: existing } = await admin.from("connection").select("id").eq("workspace_id", workspace.id).eq("platform", t.platform).maybeSingle();
+      const { error } = existing ? await admin.from("connection").update(row).eq("id", existing.id) : await admin.from("connection").insert(row);
+      if (error) return fail(error.message);
+    }
+    if (kind === "suite") {
+      const done = NextResponse.redirect(`${url.origin}/connections?notice=${encodeURIComponent(`Connected ${targets.map((t) => t.label).join(", ")}. Now choose which account to read in each card below.`)}`);
+      for (const c of ["az_google_state", "az_google_kind", "az_google_services", "az_oauth_ws"]) done.cookies.delete({ name: c, path: "/api/connect/google" });
+      return done;
+    }
   } catch (e) {
     return fail(e instanceof Error ? e.message : kind === "ga4" ? "Could not connect Google Analytics" : kind === "merchant" ? "Could not connect Google Merchant Center" : kind === "searchconsole" ? "Could not connect Google Search Console" : "Could not connect Google Ads");
   }
