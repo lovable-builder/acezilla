@@ -49,7 +49,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
   const adImports = profit ? await loadAdImports(supabase, current.id) : [];
   const pricingModels = profit ? profit.offers.map((o) => buildPricingModel(o, profit.vatRate)).filter((m): m is NonNullable<typeof m> => m !== null) : [];
 
-  // Store detail: Allegro and WooCommerce today, TikTok Shop later. The cross-store sections above stay on every tab.
+  // Store detail: Allegro and WooCommerce. The cross-store sections above stay on every tab.
   const { data: wooConn } = await supabase.from("connection").select("id").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
   const hasAllegro = !!profit, hasWoo = !!wooConn;
   const tab: "allegro" | "woocommerce" | null = sp.store === "woocommerce" && hasWoo ? "woocommerce" : sp.store === "allegro" && hasAllegro ? "allegro" : hasAllegro ? "allegro" : hasWoo ? "woocommerce" : null;
@@ -138,7 +138,6 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
           <span className="eyebrow">Store detail</span>
           {hasAllegro && <Link role="tab" aria-selected={tab === "allegro"} href={`/attribution?${storeQs("allegro")}`} className={`nav-item${tab === "allegro" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>Allegro</Link>}
           {hasWoo && <Link role="tab" aria-selected={tab === "woocommerce"} href={`/attribution?${storeQs("woocommerce")}`} className={`nav-item${tab === "woocommerce" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>WooCommerce</Link>}
-          <span className="nav-item" aria-disabled="true" title="TikTok Shop is not connectable yet" style={{ width: "fit-content", padding: "6px 14px", opacity: 0.55, cursor: "default" }}>TikTok Shop<span className="nav-soon">Soon</span></span>
         </div>
       )}
 

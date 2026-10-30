@@ -139,10 +139,6 @@ export default async function Connections({ searchParams }: { searchParams: Prom
                 />
               );
             })}
-            <Connector
-              logo={<BrandLogo brand="tiktok" />} name="TikTok Ads" desc="Campaigns, spend and creative metrics"
-              connected={false} action={<Button variant="outline" disabled title="Waiting for TikTok to approve our app">Pending approval</Button>}
-            />
           </Section>
 
           <Section n="2" title="Stores and marketplaces" feeds="Feeds: real orders and revenue. This is what makes ROAS honest, because it counts sales, not clicks.">
@@ -167,10 +163,6 @@ export default async function Connections({ searchParams }: { searchParams: Prom
                 ) : allegroEnv().ready ? <Button asChild><a href="/api/connect/allegro/start">Connect Allegro</a></Button>
                 : <Button variant="outline" disabled title="Add the Allegro client ID and secret">Not configured</Button>
               }
-            />
-            <Connector
-              logo={<BrandLogo brand="shopify" />} name="Shopify" desc="Orders and customers for real ROAS"
-              connected={false} action={<Button variant="outline" disabled>Coming soon</Button>}
             />
           </Section>
 

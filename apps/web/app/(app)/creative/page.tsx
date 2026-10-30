@@ -1,8 +1,9 @@
-import { FeaturePage } from "@/components/app/feature-page";
-import { FEATURES } from "@/lib/feature-content";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Creative · acezilla" };
-
+/**
+ * Hidden for now: this page only described a feature that is not built. It is not in the sidebar, and the old address
+ * sends people to the Command center. The explainer text is kept in lib/feature-content.ts for when the feature exists.
+ */
 export default function Page() {
-  return <FeaturePage {...FEATURES.creative!} />;
+  redirect("/dashboard");
 }
