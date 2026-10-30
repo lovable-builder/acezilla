@@ -23,10 +23,17 @@ export function StepFlow({ id, children, value, onChange }: { id: string; childr
   const go = (n: number, scroll = true) => {
     const next = Math.min(Math.max(n, 0), last);
     setInner(next); onChange?.(next);
-    try { history.replaceState(null, "", `#${id}-${next + 1}`); } catch { /* the address is only a convenience */ }
     const el = top.current;
     if (scroll && el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // Keep the address in step with the open step, however it was opened (a pill, Back or Next, or the page itself). Not on the first render,
+  // so a shared link is read before anything overwrites it.
+  const written = useRef(false);
+  useEffect(() => {
+    if (!written.current) { written.current = true; return; }
+    try { history.replaceState(null, "", `#${id}-${step + 1}`); } catch { /* the address is only a convenience */ }
+  }, [step, id]);
 
   // Return to the step named in the address after a refresh or from a shared link.
   useEffect(() => {
