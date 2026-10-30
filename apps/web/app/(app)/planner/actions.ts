@@ -5,7 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireWriter } from "@/lib/workspace";
 
 const PLATFORMS = ["meta", "google", "tiktok"];
-const back = (qs = "") => redirect(`/planner${qs}`);
+// Everything done through actions here is about flights, which is step 2 of the page.
+const back = (qs = "") => redirect(`/planner${qs}#planner-2`);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A planned flight is only a plan inside acezilla. Nothing is created in any ad platform. */

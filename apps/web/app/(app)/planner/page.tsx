@@ -3,6 +3,7 @@ import { targets, allocateBudget, buildAttribution, buildDashboard, fitResponse,
 import { getWorkspaceContext } from "@/lib/workspace";
 import { loadAdRows, loadOrders, todayUtc } from "@/lib/data";
 import { Card } from "@/components/ui/card";
+import { Step, StepFlow } from "@/components/app/step-flow";
 import { Button } from "@/components/ui/button";
 import { Term } from "@/components/app/term";
 import { money, PLATFORM, x } from "@/lib/format";
@@ -65,6 +66,8 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
       </div>
       {error && <Card style={{ color: "var(--neg)" }}>{error}</Card>}
 
+      <StepFlow id="planner">
+      <Step label="Budget split" hint="Where an extra amount earns most">
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">1</span>Budget split</h2>
@@ -113,7 +116,9 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
           </>
         )}
       </Card>
+      </Step>
 
+      <Step label="Flights" hint="Plan a sale or a launch and see what it should return">
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <h2 className="h2" style={{ margin: 0 }}><span className="n">2</span><Term>Flights</Term></h2>
         {flights.length === 0 ? <p className="sub" style={{ margin: 0 }}>No flights yet. Add a sale, a launch or a seasonal push below to see it on the timeline with an expected return.</p> : (
@@ -161,6 +166,8 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
         </form>
         <p className="sub" style={{ margin: 0, fontSize: 12 }}>A flight&apos;s budget is spread evenly over its weeks and over the platforms that have a curve. The range shows how much your past weeks scattered around that curve. It is an estimate, not a promise.</p>
       </Card>
+      </Step>
+      </StepFlow>
     </>
   );
 }

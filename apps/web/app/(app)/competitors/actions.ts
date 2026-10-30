@@ -7,7 +7,8 @@ import { decryptToken } from "@/lib/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireWriter } from "@/lib/workspace";
 
-const back = (qs = "") => redirect(`/competitors${qs}`);
+/** Returns to the page, on the step where the person was working. Steps: 1 best ads, 2 messages, 3 competitors, 4 save an ad. */
+const back = (qs = "", step = 0) => redirect(`/competitors${qs}${step ? `#competitors-${step}` : ""}`);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const text = (f: FormData, k: string, max: number) => String(f.get(k) ?? "").trim().slice(0, max);
 const fail = (e: unknown, fallback: string) => back(`?error=${encodeURIComponent(e instanceof Error ? e.message : fallback)}`);
@@ -28,7 +29,7 @@ export async function addCompetitor(formData: FormData) {
     if (error) throw new Error(error.message);
   } catch (e) { return fail(e, "Could not save the competitor"); }
   revalidatePath("/competitors");
-  back();
+  back("", 3);
 }
 
 async function removeImages(admin: ReturnType<typeof createAdminClient>, paths: (string | null)[]) {
@@ -46,7 +47,7 @@ export async function deleteCompetitor(formData: FormData) {
     if (error) throw new Error(error.message);
   } catch (e) { return fail(e, "Could not remove the competitor"); }
   revalidatePath("/competitors");
-  back();
+  back("", 3);
 }
 
 export async function addCompetitorAd(formData: FormData) {
@@ -77,7 +78,7 @@ export async function addCompetitorAd(formData: FormData) {
     if (error) throw new Error(error.message);
   } catch (e) { return fail(e, "Could not save the ad"); }
   revalidatePath("/competitors");
-  back();
+  back("", 1);
 }
 
 export async function deleteCompetitorAd(formData: FormData) {
@@ -90,7 +91,7 @@ export async function deleteCompetitorAd(formData: FormData) {
     await removeImages(admin, [(ad?.image_path as string | null) ?? null]);
   } catch (e) { return fail(e, "Could not remove the ad"); }
   revalidatePath("/competitors");
-  back();
+  back("", 1);
 }
 
 /**
@@ -134,5 +135,5 @@ export async function importMetaAds(formData: FormData) {
     }
   } catch (e) { return fail(e, "Could not read the Meta Ad Library"); }
   revalidatePath("/competitors");
-  back(`?notice=${encodeURIComponent(notice)}`);
+  back(`?notice=${encodeURIComponent(notice)}`, 1);
 }

@@ -8,6 +8,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Term } from "@/components/app/term";
+import { Step, StepFlow } from "@/components/app/step-flow";
 import { NODE_TEXT, type MetricKey } from "@/lib/strategy-content";
 import { money, PLATFORM, x } from "@/lib/format";
 import { savePlan, setStep } from "@/app/(app)/strategy/actions";
@@ -54,6 +55,7 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
   const [custom, setCustom] = useState(initial.customShares);
   const [selected, setSelected] = useState<NodeId>(initial.nodes[0] ?? "meta_prospecting");
   const [tab, setTab] = useState<"build" | "watch" | "change">("build");
+  const [flowStep, setFlowStep] = useState(0);
   const [done, setDone] = useState(new Set(doneKeys));
   const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [, start] = useTransition();
@@ -170,7 +172,7 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
         <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <h2 className="h2" style={{ margin: 0 }}>Needs your attention</h2>
           {attention.map((a) => (
-            <button key={`${a.node}-${a.r.id}`} onClick={() => { setSelected(a.node); setTab("change"); document.getElementById("node-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+            <button key={`${a.node}-${a.r.id}`} onClick={() => { setSelected(a.node); setTab("change"); setFlowStep(2); }}
               style={{ display: "flex", gap: 12, alignItems: "baseline", textAlign: "left", background: "none", border: "none", borderTop: "1px solid var(--line)", padding: "10px 0 0", cursor: "pointer", font: "inherit", color: "inherit", flexWrap: "wrap" }}>
               <span className={`seo-chip seo-chip-${CHIP[a.r.status][0]}`}>{CHIP[a.r.status][1]}</span>
               <span style={{ flex: 1, minWidth: 220 }}><b style={{ fontWeight: 600 }}>{PLATFORM[NODE_BY_ID[a.node].platform!]?.label}: {a.r.title}.</b> <span className="sub">{a.r.detail}</span></span>
@@ -180,7 +182,8 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
         </Card>
       )}
 
-      {/* 1. Numbers */}
+      <StepFlow id="strategy" value={flowStep} onChange={setFlowStep}>
+        <Step label="Your numbers" hint="Set your margin first: every verdict depends on it">
       <Card id="numbers" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">1</span>Your numbers</h2>
@@ -223,8 +226,8 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
         </div>
         <p className="sub" style={{ margin: 0, fontSize: 12 }}>Margin is the share of a sale left after goods, fees and shipping, before ads, with VAT taken out. If you are unsure, use the price advisor on the Attribution page to find it. Every judgement below is measured against these numbers, so set yours first.</p>
       </Card>
-
-      {/* 2. Map */}
+        </Step>
+        <Step label="The map" hint="Tick the channels you use, click one to open its playbook">
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">2</span>The map</h2>
@@ -234,7 +237,7 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
           <span className="eyebrow"><Term>Ground floor</Term> · {ground.filter((g) => g.done).length} of {ground.length} in place</span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {ground.map((g) => (
-              <Link key={g.key} href={g.href} title={g.why} style={{ ...chip(g.done), textDecoration: "none" }}>{g.done ? "✓" : "○"} {g.label}</Link>
+              <Link key={g.key} href={g.href} title={g.why} onClick={g.href.startsWith("#") ? (e) => { e.preventDefault(); setFlowStep(0); } : undefined} style={{ ...chip(g.done), textDecoration: "none" }}>{g.done ? "✓" : "○"} {g.label}</Link>
             ))}
           </div>
         </div>
@@ -253,7 +256,7 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
                   <div key={n.id} style={{ border: `1.5px solid ${isSel ? "var(--accent)" : "var(--line2)"}`, borderRadius: 12, padding: 12, background: inPlan ? "var(--surface)" : "transparent", opacity: inPlan ? 1 : 0.6, display: "flex", flexDirection: "column", gap: 6, transition: "border-color 150ms ease-out, opacity 150ms ease-out" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                       <input type="checkbox" checked={inPlan} onChange={() => toggleNode(n.id)} aria-label={`Include ${n.name} in my plan`} style={{ marginTop: 3, accentColor: "var(--accent)" }} />
-                      <button onClick={() => { setSelected(n.id); setTab("build"); }} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "inherit" }} aria-pressed={isSel}>
+                      <button onClick={() => { setSelected(n.id); setTab("build"); setFlowStep(2); }} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "inherit" }} aria-pressed={isSel}>
                         <b style={{ fontWeight: 600 }}>{n.name}</b>
                       </button>
                     </div>
@@ -272,8 +275,8 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
           ))}
         </div>
       </Card>
-
-      {/* 3. Playbook for the selected node */}
+        </Step>
+        <Step label="Playbook" hint="What to build, watch and change for one channel" badge={attention.length ? `${attention.length} to check` : undefined}>
       <Card id="node-panel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">3</span>{sel.name}</h2>
@@ -351,8 +354,8 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
           {text.open.map((o) => <Button key={o.href} asChild variant="outline" size="sm"><Link href={o.href}>{o.label}</Link></Button>)}
         </div>
       </Card>
-
-      {/* 4. Budget */}
+        </Step>
+        <Step label="Budget" hint="Where the money goes">
       <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">4</span>Where the money goes</h2>
@@ -377,8 +380,8 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
           </>
         )}
       </Card>
-
-      {/* 5. Weekly mission */}
+        </Step>
+        <Step label="This week" hint="Ten minutes, the same few checks every week" badge={`${missionDone}/${mission.length}`}>
       <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">5</span>This week&apos;s mission</h2>
@@ -401,6 +404,8 @@ export function StrategyMap({ currency, today, initial, suggested, facts, lastDa
         </div>
         <p className="sub" style={{ margin: 0, fontSize: 12 }}>Clear every task and the week counts towards your streak. Miss a week and the streak starts again. Ten minutes a week is enough; the point is to look at the same few things in the same order every time.</p>
       </Card>
+        </Step>
+      </StepFlow>
     </>
   );
 }

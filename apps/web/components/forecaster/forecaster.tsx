@@ -5,6 +5,7 @@ import { breakEven, CHANNEL_LABEL, CHANNEL_NOTE, compareChannels, contributionPe
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Term } from "@/components/app/term";
+import { Step, StepFlow } from "@/components/app/step-flow";
 import { GLOSSARY } from "@/lib/glossary";
 import { int, money, x } from "@/lib/format";
 import type { AdPlatform, ForecastDefaults, ForecastProduct, PlatformStats } from "./types";
@@ -185,6 +186,8 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
         </Card>
       ) : (
         <>
+          <StepFlow id="forecast">
+          <Step label="The odds" hint="Chance of profit and the spread of results">
           <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <h2 className="h2" style={{ margin: 0 }}><span className="n">2</span>The odds <span className="eyebrow" style={{ marginLeft: 8 }}>{int(sim.trials)} <Term>Simulated runs</Term> of this campaign</span></h2>
             <div className="kpis">
@@ -242,7 +245,9 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
               <p className="sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Each bar counts how many of the {int(sim.trials)} runs ended at that profit. Red is a loss, green a profit. Dashed lines mark the 1-in-10 bad run, the typical run and the 1-in-10 good run.</p>
             </Card>
           </section>
+          </Step>
 
+          <Step label="Bad, typical, good" hint="Three runs from the 10,000">
           <Card style={{ overflowX: "auto" }}>
             <h2 className="h2"><span className="n">3</span><Term>Bad, typical and good run</Term></h2>
             <table className="t tabnum">
@@ -262,7 +267,9 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
               </tbody>
             </table>
           </Card>
+          </Step>
 
+          <Step label="Break-even" hint="What each input must reach to cover the ads">
           <Card style={{ overflowX: "auto" }}>
             <h2 className="h2"><span className="n">4</span><Term>What you need to break even</Term></h2>
             <table className="t tabnum">
@@ -284,7 +291,9 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
             </table>
             <p className="sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Each order costs {be.adCostPerOrder === null ? "—" : money(be.adCostPerOrder, cur)} in ads ({money(cpc, cur)} per click ÷ {(cvr * 100).toFixed(2)}% of clicks ordering) and leaves {money(avg.orders > 0 ? (avg.storeRevenue - avg.channelFees - avg.goods - avg.shipping) / avg.orders : 0, cur)} on average before ads.</p>
           </Card>
+          </Step>
 
+          <Step label="Price and drivers" hint="Where each sale goes, and what moves the result">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))", gap: 24, alignItems: "start" }}>
             <Card>
               <h2 className="h2"><span className="n">5</span><Term k="Where one sale's price goes">Where one sale&apos;s price goes</Term></h2>
@@ -296,7 +305,9 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
               <p className="sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Typical profit when each input is 20% lower (grey) or 20% higher (purple), the rest unchanged.</p>
             </Card>
           </div>
+          </Step>
 
+          <Step label="Other destinations" hint="The same campaign sending shoppers elsewhere">
           <Card style={{ overflowX: "auto" }}>
             <h2 className="h2"><span className="n">7</span>Same {d.platforms.find((q) => q.id === platform)!.label} campaign, different destination</h2>
             <table className="t tabnum">
@@ -312,6 +323,8 @@ export function Forecaster({ d }: { d: ForecastDefaults }) {
             </table>
             <p className="sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Other destinations use their starting fees, not yours. Sending shoppers somewhere else also changes the conversion rate, which this does not model: a shop inside the app usually converts differently from your website.</p>
           </Card>
+          </Step>
+          </StepFlow>
 
           <p className="sub" style={{ margin: 0, fontSize: 12 }}>This is a forecast from the numbers you entered, not a promise. It assumes the budget is fully spent, cost per click wanders around its average, and the conversion rate is uncertain in proportion to how few clicks it was learned from. It does not know about seasons, competitors, stock, or whether the creative is any good.</p>
           <div><Button variant="ghost" type="button" onClick={() => { setAd(fromPlatform(d.platforms.find((q) => q.id === platform)!)); chooseDestination(channel); }}>Reset</Button></div>

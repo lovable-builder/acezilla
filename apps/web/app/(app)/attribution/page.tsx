@@ -3,6 +3,7 @@ import { buildAttribution, buildDashboard } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Step, StepFlow } from "@/components/app/step-flow";
 import { Term } from "@/components/app/term";
 import { PairBars, ProfitBars } from "@/components/dash/bars";
 import { PricingAdvisor } from "@/components/attribution/pricing-advisor";
@@ -72,7 +73,9 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
       {sp.error && <Card style={{ color: "var(--neg)" }}>{sp.error}</Card>}
       {noData && <Card>Nothing to analyse yet. Connect an ad account or your store on <Link href="/connections" style={{ color: "var(--accent-ink)" }}>Connections</Link>.</Card>}
 
+      <StepFlow id="results">
       {attr.channels.length > 0 && (
+      <Step label="Ads vs real sales" hint="What each platform says against what your store confirms">
         <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">01</span>Channels: platform says vs store earned</h2>
           {attr.channels.some((c) => c.platformRoas !== null) && (
@@ -98,9 +101,11 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
           </Card>
           <p className="sub" style={{ fontSize: 12, margin: 0 }}>Store revenue counts only orders whose marketing source (UTM tag or ad click ID) points at that channel. Over-claim is the share of what the platform says it earned that no tagged store order confirms.</p>
         </section>
+      </Step>
       )}
 
       {orders.length > 0 && (
+      <Step label="Where sales come from" hint="Which marketing source brought each order">
         <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">02</span>Where store revenue comes from</h2>
           <div className="kpis">
@@ -126,18 +131,23 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
             </Card>
           )}
         </section>
+      </Step>
       )}
 
+      <Step label="Website visits" hint="Google Analytics against your ad clicks">
       <section id="analytics" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <h2 className="h2" style={{ margin: 0 }}><span className="n">··</span>Website visits: Google Analytics vs ad clicks</h2>
         <TrafficPanel ga={analytics} ads={rows.filter((r) => r.platform !== "allegro")} start={start} end={endDate} cur={cur} />
       </section>
+      </Step>
 
+      {(hasAllegro || hasWoo) && (
+      <Step label="Profit per offer" hint="Fees, ads and goods taken off every offer, plus the price advisor">
       {(hasAllegro || hasWoo) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }} role="tablist" aria-label="Store detail">
           <span className="eyebrow">Store detail</span>
-          {hasAllegro && <Link role="tab" aria-selected={tab === "allegro"} href={`/attribution?${storeQs("allegro")}`} className={`nav-item${tab === "allegro" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>Allegro</Link>}
-          {hasWoo && <Link role="tab" aria-selected={tab === "woocommerce"} href={`/attribution?${storeQs("woocommerce")}`} className={`nav-item${tab === "woocommerce" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>WooCommerce</Link>}
+          {hasAllegro && <Link role="tab" aria-selected={tab === "allegro"} href={`/attribution?${storeQs("allegro")}#results-4`} className={`nav-item${tab === "allegro" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>Allegro</Link>}
+          {hasWoo && <Link role="tab" aria-selected={tab === "woocommerce"} href={`/attribution?${storeQs("woocommerce")}#results-4`} className={`nav-item${tab === "woocommerce" ? " active" : ""}`} style={{ width: "fit-content", padding: "6px 14px" }}>WooCommerce</Link>}
         </div>
       )}
 
@@ -312,6 +322,9 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
           <p className="sub" style={{ fontSize: 12, margin: 0 }}>Profit = net sales − Allegro fees − ads − cost of goods. ACoS is ad cost as a share of net sales; break-even ACoS is the highest it could be before the offer stops making money. Allegro does not tie campaign charges, delivery fees or the subscription to one offer, so they are split across the offers that sold: ads equally per offer (the average ad spend per offer), the subscription by share of sales, delivery by share of units. Hover a Fees or Ads figure to see how much of it is shared. If offer detail is empty, open Connections → Allegro and click Sync now once.</p>
         </section>
       )}
+      </Step>
+      )}
+      </StepFlow>
     </>
   );
 }

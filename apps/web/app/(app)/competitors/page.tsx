@@ -3,6 +3,7 @@ import { ANGLES, ANGLE_LABEL, AD_SOURCES, SOURCE_LABEL, SIGNAL, angleSummary, li
 import { getWorkspaceContext } from "@/lib/workspace";
 import { todayUtc } from "@/lib/data";
 import { Card } from "@/components/ui/card";
+import { Step, StepFlow } from "@/components/app/step-flow";
 import { Button } from "@/components/ui/button";
 import { Term } from "@/components/app/term";
 import { ScreenshotUpload } from "@/components/competitors/screenshot-upload";
@@ -91,6 +92,8 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
         ))}
       </div>
 
+      <StepFlow id="competitors">
+      <Step label="Best ads" hint="Longest-running first, filtered by your category">
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">1</span>Ads, longest running first</h2>
@@ -146,8 +149,10 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
         )}
         <p className="sub" style={{ margin: 0, fontSize: 12 }}>How to read it: the signal is a hint, not proof. We cannot see what a competitor spends or sells, so a long-running ad is a good sign that it pays for itself, and an ad stopped within two weeks probably did not. Look at ads that several competitors run for a long time.</p>
       </Card>
+      </Step>
 
       {angles.length > 0 && (
+        <Step label="Messages" hint="What competitors lean on">
         <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 className="h2" style={{ margin: 0 }}><span className="n">2</span>Messages competitors lean on{category ? ` in ${category}` : ""}</h2>
           <div style={{ overflowX: "auto" }}>
@@ -166,8 +171,10 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
           </div>
           <p className="sub" style={{ margin: 0, fontSize: 12 }}>A message that several competitors keep running for months is working for them. A message nobody uses is either an opening for you or a reason nobody tried it.</p>
         </Card>
+        </Step>
       )}
 
+      <Step label="Competitors" hint="Who you watch, and where to find their ads">
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <h2 className="h2" style={{ margin: 0 }}><span className="n">3</span>Competitors you watch</h2>
         {competitors.length === 0 ? <p className="sub" style={{ margin: 0 }}>Add the shops that sell what you sell. Tag each with your category so you can filter their ads.</p> : (
@@ -202,7 +209,9 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
           <Button>Add competitor</Button>
         </form>
       </Card>
+      </Step>
 
+      <Step label="Save an ad" hint="Copy in what you found in an ad library">
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <h2 className="h2" style={{ margin: 0 }}><span className="n">4</span>Save an ad</h2>
         {competitors.length === 0 ? <p className="sub" style={{ margin: 0 }}>Add a competitor first.</p> : (
@@ -232,6 +241,8 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
         )}
         <p className="sub" style={{ margin: 0, fontSize: 12 }}>Ad libraries show when an ad started, whether it is still active and, on Facebook and Instagram, how many versions of it exist. Copy those in. Dates and versions are what the signal uses.</p>
       </Card>
+      </Step>
+      </StepFlow>
     </>
   );
 }

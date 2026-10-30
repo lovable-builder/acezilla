@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Step as FlowStep, StepFlow } from "@/components/app/step-flow";
 import { BrandLogo } from "@/components/brand/logo";
 import { ago } from "@/lib/format";
 import { syncNow } from "./connection-actions";
@@ -109,6 +110,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               </form>
             </Card>
           )}
+          <StepFlow id="connect">
+          <FlowStep label="Ad platforms" hint="Meta and Google, where the money goes" badge={adsEmpty.length ? "no campaigns" : undefined}>
           <Section n="1" title="Ad platforms" feeds="Feeds: spend, clicks, conversions and the ROAS each platform reports.">
             {(["meta", "google"] as const).map((id) => {
               const c = conn(id);
@@ -140,7 +143,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               );
             })}
           </Section>
-
+          </FlowStep>
+          <FlowStep label="Stores" hint="Your shop and Allegro, where the sales happen">
           <Section n="2" title="Stores and marketplaces" feeds="Feeds: real orders and revenue. This is what makes ROAS honest, because it counts sales, not clicks.">
             <Connector
               logo={<BrandLogo brand="woocommerce" />} name="WooCommerce" desc="Your WordPress store. Install our plugin, paste a code, done."
@@ -165,7 +169,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               }
             />
           </Section>
-
+          </FlowStep>
+          <FlowStep label="Analytics" hint="Website visits and search words">
           <Section n="3" title="Analytics" feeds="Feeds: on-site sessions and conversions, and the words people searched on Google. Optional.">
             <Connector
               logo={<BrandLogo brand="ga4" />} name="Google Analytics 4" desc="Sessions and on-site conversions"
@@ -198,7 +203,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               }
             />
           </Section>
-
+          </FlowStep>
+          <FlowStep label="Product feed" hint="What Google Shopping shows or blocks">
           <Section n="4" title="Product feed" feeds="Feeds: which products Google Shopping shows or blocks, and clicks from free listings and ads. Optional.">
             <Connector
               logo={<BrandLogo brand="merchant" />} name="Google Merchant Center" desc="Product approval status and Shopping traffic"
@@ -216,6 +222,8 @@ export default async function Connections({ searchParams }: { searchParams: Prom
               }
             />
           </Section>
+          </FlowStep>
+          </StepFlow>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
