@@ -15,8 +15,8 @@ export const maxDuration = 300;   // audits run after the response, inside this 
 type Scores = { seo: number; geo: number; aeo: number };
 const tone = (n: number) => (n >= 8 ? "var(--pos)" : n >= 5 ? "var(--warn)" : "var(--neg)");
 
-export default async function SeoPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
-  const { error, notice } = await searchParams;
+export default async function SeoPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string; site?: string }> }) {
+  const { error, notice, site } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();
   const [{ data: sites }, { data: audits }] = current
     ? await Promise.all([
@@ -38,7 +38,7 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
       </div>
       {error && <Card style={{ color: "var(--neg)" }}>{error}</Card>}
       {notice && <Card style={{ color: "var(--pos)" }}>{notice}</Card>}
-      {current && <SearchWordsPanel supabase={supabase} workspaceId={current.id} />}
+      {current && <SearchWordsPanel supabase={supabase} workspaceId={current.id} siteId={site} />}
 
       <Card>
         <form action={addSite} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>

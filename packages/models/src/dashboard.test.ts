@@ -45,3 +45,14 @@ test("flags gradual week-over-week slide as fatigue, and stays quiet when stable
   const stable = days(20).map((d) => mk("s", d, 100, 300));
   assert.equal(detectAnomalies(stable, "2026-10-18").length, 0);
 });
+
+test("Allegro spend, which has no sales to match, does not drag ROAS down or push cost per sale up", () => {
+  const row = (platform: string, spend: number, revenue: number, conversions: number): DailyRow => ({ campaignId: platform, campaignName: platform, platform, status: "active", date: "2026-10-18", spend, impressions: 0, clicks: 0, conversions, revenue });
+  const rows = [row("meta", 100, 400, 10), row("allegro", 100, 0, 0)];
+  const all = buildDashboard(rows, { windowDays: 1, endDate: "2026-10-18" }).kpis;
+  assert.equal(all.roas.value, 2);                    // 400 over 200, as before when nothing is excluded
+  const fair = buildDashboard(rows, { windowDays: 1, endDate: "2026-10-18", nonReporting: ["allegro"] }).kpis;
+  assert.equal(fair.spend.value, 200);                // spend still counts everything
+  assert.equal(fair.roas.value, 4);                   // return only against the platform that reports sales
+  assert.equal(fair.cpa.value, 10);
+});

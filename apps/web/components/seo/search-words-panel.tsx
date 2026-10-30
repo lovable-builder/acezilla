@@ -10,7 +10,7 @@ const PAGE = 1000;
 const pct = (n: number | null) => (n === null ? "—" : `${(n * 100).toFixed(n < 0.1 ? 1 : 0)}%`);
 
 /** The words people typed into Google before they reached the website, from Search Console (read-only). Useful for SEO and for ad wording. */
-export async function SearchWordsPanel({ supabase, workspaceId }: { supabase: SupabaseClient; workspaceId: string }) {
+export async function SearchWordsPanel({ supabase, workspaceId, siteId }: { supabase: SupabaseClient; workspaceId: string; siteId?: string }) {
   const { data: conn } = await supabase.from("connection").select("status,last_sync_at,last_error").eq("workspace_id", workspaceId).eq("platform", "searchconsole").maybeSingle();
   if (!conn) {
     return (
@@ -29,10 +29,12 @@ export async function SearchWordsPanel({ supabase, workspaceId }: { supabase: Su
       </Card>
     );
   }
+  // Two websites must not be added together: the same word would count twice and the average position would mean nothing.
+  const site = sites.find((x) => x.id === siteId) ?? sites[0]!;
   const rows: SearchQuery[] = [];
   let period = "";
   for (let from = 0; ; from += PAGE) {
-    const { data } = await supabase.from("search_query").select("query,clicks,impressions,position,period_start,period_end").eq("workspace_id", workspaceId).order("query").range(from, from + PAGE - 1);
+    const { data } = await supabase.from("search_query").select("query,clicks,impressions,position,period_start,period_end").eq("workspace_id", workspaceId).eq("site_id", site.id as string).order("query").range(from, from + PAGE - 1);
     for (const r of data ?? []) { rows.push({ query: r.query as string, clicks: Number(r.clicks), impressions: Number(r.impressions), position: Number(r.position) }); period = `${r.period_start} to ${r.period_end}`; }
     if ((data?.length ?? 0) < PAGE) break;
   }
@@ -43,12 +45,19 @@ export async function SearchWordsPanel({ supabase, workspaceId }: { supabase: Su
     <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <h2 className="h2" style={{ margin: 0 }}>What people search on Google</h2>
-        <span className="eyebrow">{sites.map((s) => s.name as string).join(", ")}{conn.last_sync_at ? ` · read ${ago(conn.last_sync_at as string)}` : ""}</span>
+        <span className="eyebrow">{site.name as string}{conn.last_sync_at ? ` · read ${ago(conn.last_sync_at as string)}` : ""}</span>
         <Button asChild variant="ghost" size="sm"><Link href="/connections/searchconsole" style={{ marginLeft: "auto" }}>Websites</Link></Button>
       </div>
+      {sites.length > 1 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {sites.map((x) => <Link key={x.id as string} href={`/seo?site=${x.id}`} style={{ padding: "5px 11px", borderRadius: 999, fontSize: 13, textDecoration: "none", border: `1px solid ${x.id === site.id ? "var(--accent)" : "var(--line2)"}`, background: x.id === site.id ? "var(--accent-soft)" : "transparent", color: x.id === site.id ? "var(--accent-ink)" : "var(--ink2)" }}>{x.name as string}</Link>)}
+        </div>
+      )}
       {broken && <div style={{ color: "var(--neg)", fontSize: 13 }}>{conn.status === "needs_reauth" ? "Login expired. Reconnect on the Connections page." : `Last sync failed: ${conn.last_error ?? "unknown error"}`}</div>}
       {rows.length === 0 ? (
-        <p className="sub" style={{ margin: 0 }}>No search words have been read yet. Press Sync now on the Connections page. A new website can take a few days to show data in Search Console.</p>
+        <p className="sub" style={{ margin: 0 }}>{conn.last_sync_at
+          ? <>Search Console answered, but it has no search words for this website in the last 28 days. That is normal for a new website or one with very few visits: Google also hides rare searches. Check again in a few days. <Link href="/connections" style={{ color: "var(--accent-ink)" }}>Connections</Link></>
+          : <>No search words have been read yet. Press Sync now on the Connections page.</>}</p>
       ) : (
         <>
           <div className="kpis">

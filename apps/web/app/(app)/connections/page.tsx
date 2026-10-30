@@ -29,6 +29,10 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const ga4 = conn("ga4");
   const merchant = conn("merchant");
   const searchc = conn("searchconsole");
+  // How many accounts were picked on each connection that needs a pick. Zero means connected but empty.
+  const chosen: Record<string, number> = {
+    meta: names("meta").length, google: names("google").length, ga4: (props ?? []).length, merchant: (mAccts ?? []).length, searchconsole: (sSites ?? []).length,
+  };
   const googleReady = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   const adsOn = ["meta", "google", "tiktok"].filter((p) => conn(p));
@@ -65,7 +69,10 @@ export default async function Connections({ searchParams }: { searchParams: Prom
             <thead><tr><th style={{ textAlign: "left" }}>Source</th><th style={{ textAlign: "left" }}>Status</th><th style={{ textAlign: "left" }}>Last data</th><th style={{ textAlign: "left" }}>What to do</th></tr></thead>
             <tbody>
               {(conns ?? []).map((c) => {
-                const h = health(c.platform as string, c.status as string, c.last_sync_at as string | null, c.last_error as string | null);
+                // Connected but nothing chosen: no data will ever arrive, so it must not read "Healthy".
+                const h = chosen[c.platform as string] === 0
+                  ? { label: "Nothing chosen", color: "var(--warn)", todo: "Choose which account to read, then press Save and sync." }
+                  : health(c.platform as string, c.status as string, c.last_sync_at as string | null, c.last_error as string | null);
                 return (
                   <tr key={c.platform as string}>
                     <td style={{ textAlign: "left" }}><b style={{ fontWeight: 600 }}>{LABEL[c.platform as string] ?? c.platform}</b></td>
@@ -276,7 +283,7 @@ function Connector({ logo, name, desc, connected, lastSync, accounts = [], accou
         <div className="sub" style={{ margin: 0, fontSize: 13 }}>
           {connected
             ? accounts.length > 0
-              ? `${accounts.length} ${accountWord}${accounts.length === 1 ? "" : "s"}: ${accounts.join(", ")}${lastSync ? ` · synced ${ago(lastSync)}` : ""}`
+              ? `${accounts.length} ${accounts.length === 1 ? accountWord : accountWord.replace(/y$/, "ie") + "s"}: ${accounts.join(", ")}${lastSync ? ` · synced ${ago(lastSync)}` : ""}`
               : lastSync ? `Synced ${ago(lastSync)}` : "No accounts selected yet. Click Choose accounts."
             : desc}
         </div>

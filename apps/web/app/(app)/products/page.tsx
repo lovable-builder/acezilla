@@ -80,7 +80,7 @@ export default async function Products({ searchParams }: { searchParams: Promise
           </div>
           {wooMissing && (
             <Card style={{ borderColor: "var(--warn)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ flex: 1, minWidth: 240 }}><b>WooCommerce is connected, but its product list has not arrived.</b> Update the acezilla plugin to version 1.1.0, then open your WordPress admin once. The list is sent automatically, and every product shows here, including ones with no sales.</span>
+              <span style={{ flex: 1, minWidth: 240 }}><b>WooCommerce is connected, but its product list has not arrived.</b> Update the acezilla plugin to its latest version (1.4.0 or newer), then open your WordPress admin once. The list is sent automatically, and every product shows here, including ones with no sales.</span>
               <Button asChild variant="outline"><Link href="/connections/woocommerce">Get the plugin</Link></Button>
             </Card>
           )}

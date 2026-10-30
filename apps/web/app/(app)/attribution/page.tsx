@@ -3,6 +3,7 @@ import { buildAttribution, buildDashboard } from "@acezilla/models";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Term } from "@/components/app/term";
 import { PairBars, ProfitBars } from "@/components/dash/bars";
 import { PricingAdvisor } from "@/components/attribution/pricing-advisor";
 import { buildPricingModel, buildStoreProductProfit } from "@acezilla/models";
@@ -81,7 +82,7 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
           )}
           <Card style={{ overflowX: "auto", padding: 0 }}>
             <table className="t tabnum" style={{ margin: 0 }}>
-              <thead><tr><th style={{ textAlign: "left" }}>Channel</th><th>Ad spend</th><th>Platform revenue</th><th>Platform ROAS</th><th>Store revenue</th><th>Store ROAS</th><th>Over-claim</th></tr></thead>
+              <thead><tr><th style={{ textAlign: "left" }}>Channel</th><th>Ad spend</th><th>Platform revenue</th><th><Term>Platform ROAS</Term></th><th>Store revenue</th><th><Term>Modeled ROAS</Term></th><th><Term>Over-claim</Term></th></tr></thead>
               <tbody>{attr.channels.map((c) => (
                 <tr key={c.platform}>
                   <td style={{ textAlign: "left" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 8, background: PLATFORM[c.platform]?.color }} />{label(c.platform)}</td>
@@ -206,9 +207,9 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
           )}
           <Card style={{ overflowX: "auto", padding: 0 }}>
             <table className="t tabnum" style={{ margin: 0 }}>
-              <thead><tr><th style={{ textAlign: "left" }}>Offer</th><th>Units</th><th>Net sales</th><th>Fees</th><th>Ads</th><th>ACoS</th><th>Cost per unit</th><th>Profit</th><th>Break-even ACoS</th></tr></thead>
+              <thead><tr><th style={{ textAlign: "left" }}>Offer</th><th>Units</th><th>Net sales</th><th>Fees</th><th>Ads</th><th><Term>ACoS</Term></th><th>Cost per unit</th><th>Profit</th><th><Term>Break-even ACoS</Term></th></tr></thead>
               <tbody>
-                {profit.offers.map((o) => (
+                {profit.offers.filter((o) => o.units > 0).map((o) => (
                   <tr key={o.offerId}>
                     <td style={{ textAlign: "left", maxWidth: 260, overflowWrap: "anywhere" }}>{o.name}{o.status === "loss" && <span className="seo-chip seo-chip-missing" style={{ marginLeft: 8 }}>Losing money</span>}{o.status === "thin" && <span className="seo-chip seo-chip-attention" style={{ marginLeft: 8 }}>Thin margin</span>}</td>
                     <td>{int(o.units)}</td><td>{money(o.revenue, cur)}</td><td title={o.shared > 0 ? `Includes ${money(o.shared, cur)} of shared costs (campaign charges, delivery, subscription), split across offers by sales or units` : undefined}>{money(o.fees, cur)}</td><td title={o.shared > 0 ? "Includes campaign ad charges Allegro does not tie to one offer, split equally across the offers that sold" : undefined}>{money(o.ads, cur)}</td>
@@ -224,10 +225,29 @@ export default async function Attribution({ searchParams }: { searchParams: Prom
                     <td style={{ color: "var(--ink3)" }}>{pct(o.breakEvenAcos, 1)}</td>
                   </tr>
                 ))}
-                {profit.offers.length === 0 && <tr><td colSpan={9} style={{ textAlign: "left" }}>No sales or ad costs in this period. Run Sync now on the Allegro connection to import offer detail.</td></tr>}
+                {profit.offers.every((o) => o.units === 0) && <tr><td colSpan={9} style={{ textAlign: "left" }}>No sales or ad costs in this period. Run Sync now on the Allegro connection to import offer detail.</td></tr>}
                 {profit.accountLevel.total !== 0 && <tr><td style={{ textAlign: "left", color: "var(--ink3)" }}>Account-level costs (subscription and charges not tied to an offer)</td><td /><td /><td>{money(profit.accountLevel.total, cur)}</td><td /><td /><td /><td /><td /></tr>}
               </tbody>
             </table>
+            {profit.offers.some((o) => o.units === 0) && (
+              <details style={{ padding: "10px 16px", borderTop: "1px solid var(--line)" }}>
+                <summary style={{ cursor: "pointer", fontSize: 13 }}>
+                  {profit.offers.filter((o) => o.units === 0).length} offers had ad or fee charges but no sales in this period ({money(profit.offers.filter((o) => o.units === 0).reduce((t, o) => t + o.ads + o.fees, 0), cur)})
+                </summary>
+                <table className="t tabnum" style={{ margin: "8px 0 0" }}>
+                  <thead><tr><th style={{ textAlign: "left" }}>Offer</th><th>Ads</th><th>Fees</th></tr></thead>
+                  <tbody>
+                    {profit.offers.filter((o) => o.units === 0).sort((x, y) => y.ads + y.fees - (x.ads + x.fees)).map((o) => (
+                      <tr key={o.offerId}>
+                        <td style={{ textAlign: "left", maxWidth: 360, overflowWrap: "anywhere" }}>{/^Offer [0-9a-f-]{20,}$/i.test(o.name) ? `Unnamed offer ending ${o.offerId.slice(-6)}` : o.name}</td>
+                        <td>{money(o.ads, cur)}</td><td>{money(o.fees, cur)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="sub" style={{ fontSize: 12, margin: "8px 0 0" }}>Allegro splits campaign charges equally over every offer, even ones that did not sell. These are listed here so they do not crowd the table above.</p>
+              </details>
+            )}
           </Card>
           {profit.offers.some((o) => o.paid) && (
             <Card style={{ overflowX: "auto", display: "flex", flexDirection: "column", gap: 10 }}>

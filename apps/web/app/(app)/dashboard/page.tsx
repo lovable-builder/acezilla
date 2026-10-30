@@ -127,7 +127,7 @@ function StoreBlock({ store, cur, spendByDate, adSpend, platformRoas, compare, c
             <span className="eyebrow"><Term>{c.label}</Term></span>
             <span className="tabnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>{c.v}</span>
             {c.label === "Store ROAS"
-              ? <span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{platformRoas === null ? "ad spend ÷ store revenue" : `${x(platformRoas)} platform-reported`}</span>
+              ? <span className="mono tabnum" style={{ fontSize: 12, color: "var(--ink3)" }}>{platformRoas === null ? "store revenue ÷ ad spend" : `${x(platformRoas)} platform-reported`}</span>
               : <span className="mono tabnum" style={{ fontSize: 12, color: tone(c.good, c.d) }}>{compare ? delta(c.d) : " "}</span>}
             {c.s.length > 0 && <Sparkline data={c.s} color="var(--accent)" />}
           </div>
@@ -211,7 +211,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const { data: allConns } = await supabase.from("connection").select("platform").eq("workspace_id", current.id);
   const storeConns = (allConns ?? []).filter((c) => ["woocommerce", "allegro", "shopify"].includes(c.platform as string));
   const connectedStores = storeConns.map((c) => c.platform as string);
-  const adsConnected = (allConns ?? []).some((c) => ["meta", "google", "tiktok"].includes(c.platform as string));
+  const adsConnected = (allConns ?? []).some((c) => ["meta", "google", "tiktok", "allegro"].includes(c.platform as string));
   const storeNames = storeConns.map((c) => PLATFORM[c.platform as string]?.label ?? (c.platform as string).replace(/^./, (m) => m.toUpperCase()));
   const { data: wooConn } = await supabase.from("connection").select("last_error,stats").eq("workspace_id", current.id).eq("platform", "woocommerce").maybeSingle();
   const currencyWarning = (wooConn?.last_error as string | null)?.startsWith("Your store sells in") ? (wooConn!.last_error as string) : null;
@@ -290,7 +290,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     );
   }
 
-  const d = buildDashboard(rows, { windowDays: period.windowDays, endDate: period.endDate });
+  const d = buildDashboard(rows, { windowDays: period.windowDays, endDate: period.endDate, nonReporting: ["allegro"] });
   const cur = current.currency;
   const k = d.kpis;
   const store = orderRows.length > 0 ? buildStoreSales(orderRows, { endDate: d.endDate, windowDays: d.windowDays }) : null;

@@ -10,6 +10,8 @@ import { saveAndSync } from "./actions";
 
 const STATUS: Record<number, string> = { 1: "Active", 2: "Disabled", 3: "Unsettled", 7: "In review", 9: "Grace period", 100: "Closing", 101: "Closed" };
 
+export const maxDuration = 300; // importing long history runs inside this route's time budget
+
 export default async function MetaAccounts({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();

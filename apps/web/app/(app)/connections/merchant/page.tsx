@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { disconnect } from "../connection-actions";
 import { registerDeveloper, saveAndSyncMerchant } from "./actions";
 
+export const maxDuration = 300; // importing long history runs inside this route's time budget
+
 export default async function MerchantAccounts({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { error, notice } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();

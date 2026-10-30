@@ -16,7 +16,7 @@ export interface CatalogEntry { id: string; name: string; store: string; imageUr
 function Submit() {
   const { pending } = useFormStatus();
   return (
-    <button className={`btn${pending ? " bw-shimmer" : ""}`} disabled={pending} style={{ padding: "12px 22px", fontSize: 15, color: pending ? "#fff" : undefined }}>
+    <button className={`btn${pending ? " bw-shimmer" : ""}`} disabled={pending} style={{ padding: "12px 22px", fontSize: 15, color: pending ? "var(--bg)" : undefined }}>
       {pending ? "Writing your campaign…" : "✨ Draft my campaign"}
     </button>
   );

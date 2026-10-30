@@ -27,12 +27,13 @@ export async function pullSearchConsole(admin: Admin, conn: { id: string; worksp
   let rows = 0;
   for (const s of sites ?? []) {
     const words = await fetchSearchQueries({ accessToken }, s.external_id as string, since, until);
-    await admin.from("search_query").delete().eq("site_id", s.id);
+    // Write the new words first, then remove only what belongs to an older period, so a failed write never leaves the site empty.
     const data = words.map((w) => ({ workspace_id: conn.workspace_id, site_id: s.id, query: w.query, clicks: w.clicks, impressions: w.impressions, position: w.position, period_start: since, period_end: until }));
     for (let i = 0; i < data.length; i += CHUNK) {
-      const { error } = await admin.from("search_query").insert(data.slice(i, i + CHUNK));
+      const { error } = await admin.from("search_query").upsert(data.slice(i, i + CHUNK), { onConflict: "site_id,query" });
       if (error) throw new Error(`search_query: ${error.message}`);
     }
+    await admin.from("search_query").delete().eq("site_id", s.id).lt("period_end", until);
     rows += data.length;
   }
   return { sites: sites?.length ?? 0, rows };

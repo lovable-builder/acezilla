@@ -25,7 +25,7 @@ const sum = (rows: DailyRow[], k: "spend" | "revenue" | "conversions" | "clicks"
 const between = (rows: DailyRow[], from: string, to: string) => rows.filter((r) => r.date >= from && r.date <= to);
 const pct = (cur: number, prev: number) => (prev > 0 ? (cur - prev) / prev : null);
 
-export function buildDashboard(rows: DailyRow[], opts: { windowDays?: number; endDate?: string } = {}): Dashboard {
+export function buildDashboard(rows: DailyRow[], opts: { windowDays?: number; endDate?: string; /** Platforms that report spend but no sales (Allegro Ads). Their spend is left out of ROAS and cost per sale, which would otherwise look worse than they are. */ nonReporting?: string[] } = {}): Dashboard {
   const windowDays = opts.windowDays ?? 30;
   const endDate = opts.endDate ?? rows.reduce((m, r) => (r.date > m ? r.date : m), "0000-00-00");
   const start = shiftDate(endDate, -(windowDays - 1));
@@ -47,12 +47,18 @@ export function buildDashboard(rows: DailyRow[], opts: { windowDays?: number; en
   const kpi = (value: number, pv: number, s: number[]): Kpi => ({ value, prev: pv, deltaPct: pct(value, pv), series: s });
   const cs = sum(cur, "spend"), cr = sum(cur, "revenue"), cc = sum(cur, "conversions");
   const ps = sum(prev, "spend"), pr = sum(prev, "revenue"), pc = sum(prev, "conversions");
+  // Return and cost per sale are judged on the platforms that report sales; spend itself still counts everything.
+  const silent = new Set(opts.nonReporting ?? []);
+  const rep = (list: DailyRow[]) => (silent.size ? list.filter((r) => !silent.has(r.platform)) : list);
+  const rcs = sum(rep(cur), "spend"), rps = sum(rep(prev), "spend");
+  const repByDate = new Map<string, number>();
+  for (const r of rep(cur)) repByDate.set(r.date, (repByDate.get(r.date) ?? 0) + r.spend);
 
   const kpis = {
     spend: kpi(cs, ps, series.map((s) => s.spend)),
     revenue: kpi(cr, pr, series.map((s) => s.revenue)),
-    roas: kpi(cs > 0 ? cr / cs : 0, ps > 0 ? pr / ps : 0, series.map((s) => (s.spend > 0 ? s.revenue / s.spend : 0))),
-    cpa: kpi(cc > 0 ? cs / cc : 0, pc > 0 ? ps / pc : 0, series.map((s, i) => (conv[i]! > 0 ? s.spend / conv[i]! : 0))),
+    roas: kpi(rcs > 0 ? cr / rcs : 0, rps > 0 ? pr / rps : 0, series.map((s) => { const sp = repByDate.get(s.date) ?? 0; return sp > 0 ? s.revenue / sp : 0; })),
+    cpa: kpi(cc > 0 ? rcs / cc : 0, pc > 0 ? rps / pc : 0, series.map((s, i) => { const sp = repByDate.get(s.date) ?? 0; return conv[i]! > 0 ? sp / conv[i]! : 0; })),
     conversions: kpi(cc, pc, conv),
   };
 

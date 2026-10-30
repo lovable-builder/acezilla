@@ -66,11 +66,11 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
           <h2 className="h2" style={{ margin: 0 }}><span className="n">1</span>Budget split</h2>
           <span className="eyebrow">Per week · learned from your last 13 weeks</span>
         </div>
-        {platforms.length === 0 ? <p className="sub" style={{ margin: 0 }}>Connect an ad platform and let it sync. The planner learns from your own spend and results.</p> : (
+        {platforms.length === 0 ? <p className="sub" style={{ margin: 0 }}>The planner learns from platforms that report sales, which are Meta, Google and TikTok. Allegro Ads reports spend only, so it cannot be planned from a curve: judge it on the Attribution page, by cost of sale per offer. Connect one of the others and let it sync to plan with it.</p> : (
           <>
             <div style={{ overflowX: "auto" }}>
               <table className="t">
-                <thead><tr><th style={{ textAlign: "left" }}>Platform</th><th>Weekly spend now</th><th><Term>Platform ROAS</Term></th><th><Term>Store ROAS</Term></th><th>Next {cur} returns</th><th>Suggested</th><th>Expected weekly revenue</th></tr></thead>
+                <thead><tr><th style={{ textAlign: "left" }}>Platform</th><th>Weekly spend now</th><th><Term>Platform ROAS</Term></th><th><Term>Modeled ROAS</Term></th><th>Next {cur} returns</th><th>Suggested</th><th>Expected weekly revenue</th></tr></thead>
                 <tbody>
                   {platforms.map((p) => {
                     const r = alloc?.rows.find((a) => a.platform === p), c = chan.get(p), f = fits[p];
@@ -111,7 +111,7 @@ export default async function Planner({ searchParams }: { searchParams: Promise<
       </Card>
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <h2 className="h2" style={{ margin: 0 }}><span className="n">2</span>Flights</h2>
+        <h2 className="h2" style={{ margin: 0 }}><span className="n">2</span><Term>Flights</Term></h2>
         {flights.length === 0 ? <p className="sub" style={{ margin: 0 }}>No flights yet. Add a sale, a launch or a seasonal push below to see it on the timeline with an expected return.</p> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, padding: "6px 0" }}>

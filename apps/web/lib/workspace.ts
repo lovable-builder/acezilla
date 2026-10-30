@@ -15,11 +15,19 @@ export const getWorkspaceContext = cache(async () => {
   return { supabase, workspaces, current };
 });
 
-export async function getLastSync(workspaceId: string): Promise<string | null> {
+/**
+ * The line in the sidebar. One fresh source must not hide a stale one, so it counts sources that are out of date.
+ * WooCommerce is left out of the count: it reports when an order happens, so a quiet store is not a broken one.
+ */
+export async function getSyncLabel(workspaceId: string, ago: (iso: string) => string): Promise<string> {
   const supabase = await createClient();
-  const { data } = await supabase.from("connection").select("last_sync_at").eq("workspace_id", workspaceId)
-    .not("last_sync_at", "is", null).order("last_sync_at", { ascending: false }).limit(1);
-  return (data?.[0]?.last_sync_at as string | undefined) ?? null;
+  const { data } = await supabase.from("connection").select("platform,last_sync_at,status").eq("workspace_id", workspaceId);
+  const pulled = (data ?? []).filter((c) => c.platform !== "woocommerce");
+  const times = pulled.map((c) => c.last_sync_at as string | null).filter((t): t is string => !!t);
+  if (!times.length) return "No data synced";
+  const limit = Date.now() - 36 * 3600000;
+  const old = pulled.filter((c) => c.status === "needs_reauth" || c.status === "error" || !c.last_sync_at || new Date(c.last_sync_at as string).getTime() < limit).length;
+  return old > 0 ? `${old} of ${pulled.length} sources need attention` : `Synced ${ago(times.sort().at(-1)!)}`;
 }
 
 /** Signed-in user who may change data in the active workspace (owner/admin/buyer). Throws otherwise. */

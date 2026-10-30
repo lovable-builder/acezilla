@@ -17,6 +17,8 @@ export async function GET(req: Request) {
 
   try {
     const { workspace } = await requireWriter();
+    const startedIn = req.headers.get("cookie")?.match(/az_oauth_ws=([0-9a-f-]{36})/)?.[1];
+    if (startedIn && startedIn !== workspace.id) return fail("You switched workspace during the login. Switch back to the workspace you started from, then connect again.");
     const { accessToken, expiresInSec } = await exchangeMetaCode({
       appId: process.env.META_APP_ID!, appSecret: process.env.META_APP_SECRET!,
       redirectUri: `${url.origin}/api/connect/meta/callback`, code, version: process.env.META_GRAPH_VERSION,

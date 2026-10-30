@@ -14,7 +14,7 @@ export const FEATURES: Record<string, FeatureContent> = {
       { tag: "02 · Verify", title: "Every number has a receipt", body: "Each answer shows the accounts, time window and attribution model it used, and ranks the drivers behind a change, so you can check the work.",
         example: { kind: "bars", rows: [{ label: "Lookalike 1%", value: 78, text: "−$1.9k", tone: "neg" }, { label: "UGC Hooks", value: 34, text: "−$0.8k", tone: "warn" }, { label: "Brand Search", value: 12, text: "+$0.3k", tone: "pos" }] } },
       { tag: "03 · Approve", title: "It suggests. You decide.", body: "The copilot never changes a live campaign on its own. Every recommendation becomes a draft that waits for a person in Rules & approvals.",
-        example: { kind: "steps", items: [{ text: "Draft created: pause Lookalike 1%", state: "done" }, { text: "Waiting in Approvals", state: "next" }, { text: "Approved and pushed by you", state: "next" }] } },
+        example: { kind: "steps", items: [{ text: "Draft created: pause Lookalike 1%", state: "done" }, { text: "Waiting in Approvals", state: "next" }, { text: "Approved, then you make the change yourself", state: "next" }] } },
     ],
   },
   planner: {
@@ -78,8 +78,8 @@ export const FEATURES: Record<string, FeatureContent> = {
         example: { kind: "rows", rows: [{ label: "IF ROAS < 1.5 for 3 days", note: "THEN draft: pause the campaign", value: "On", tone: "pos" }, { label: "IF spend > 120% of budget", note: "THEN draft: lower daily budget", value: "On", tone: "pos" }, { label: "IF creative is Fatigued", note: "THEN draft: 3 new variants", value: "Off" }] } },
       { tag: "02 · Queue", title: "One approval queue", body: "Suggestions from rules, the copilot and the campaign builder wait together, each with its estimated impact, confidence and source.",
         example: { kind: "rows", rows: [{ label: "Pause Lookalike 1%", note: "Source: rule · confidence high", value: "+$1.9k/wk", tone: "pos" }, { label: "Move $14k to Meta", note: "Source: planner", value: "+$3.1k/wk", tone: "pos" }] } },
-      { tag: "03 · Control", title: "Limits, roles and a full log", body: "Set spend limits and decide who can approve. Approved changes are pushed once, safely, and every action is recorded in an audit log.",
-        example: { kind: "steps", items: [{ text: "Approved by you, 09:12", state: "done" }, { text: "Pushed to Meta once", state: "done" }, { text: "Logged in the audit trail", state: "done" }] } },
+      { tag: "03 · Control", title: "Limits, roles and a full log", body: "Set spend limits and decide who can approve. This is planned: approved suggestions will be recorded in an audit log, and you make each change in the ad platform yourself.",
+        example: { kind: "steps", items: [{ text: "Approved by you, 09:12", state: "done" }, { text: "You make the change in Meta", state: "done" }, { text: "Logged in the audit trail", state: "done" }] } },
     ],
   },
 };

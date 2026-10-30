@@ -19,6 +19,8 @@ export async function GET(req: Request) {
   const scope = kind === "ga4" ? GA4_SCOPE : kind === "merchant" ? MERCHANT_SCOPE : kind === "searchconsole" ? SEARCH_CONSOLE_SCOPE : GOOGLE_ADS_SCOPE;
   try {
     const { workspace } = await requireWriter();
+    const startedIn = req.headers.get("cookie")?.match(/az_oauth_ws=([0-9a-f-]{36})/)?.[1];
+    if (startedIn && startedIn !== workspace.id) return fail("You switched workspace during the login. Switch back to the workspace you started from, then connect again.");
     const { refreshToken } = await exchangeGoogleCode({
       clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       redirectUri: `${url.origin}/api/connect/google/callback`, code,

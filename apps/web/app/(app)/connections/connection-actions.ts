@@ -24,7 +24,7 @@ export async function syncNow(formData: FormData) {
   try {
     const { admin, conn } = await load(String(formData.get("platform")));
     const r = await syncConnection(admin, conn);
-    qs = r.ok ? `notice=${encodeURIComponent(`Synced ${r.rows} daily rows from ${LABEL[conn.platform]}`)}` : `error=${encodeURIComponent(r.error)}`;
+    qs = r.ok ? `notice=${encodeURIComponent(conn.platform === "searchconsole" ? `Read ${r.rows} search words from ${LABEL[conn.platform]}` : `Synced ${r.rows} daily rows from ${LABEL[conn.platform]}`)}` : `error=${encodeURIComponent(r.error)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Sync failed")}`;
   }
@@ -38,7 +38,15 @@ export async function disconnect(formData: FormData) {
   try {
     if (formData.get("confirm") !== "yes") throw new Error("Tick the box to confirm");
     const { admin, conn } = await load(String(formData.get("platform")));
-    await revokeAtPlatform(conn.platform, conn.token_enc);
+    // Google Ads, Analytics, Search Console and Merchant Center can share one Google grant. Revoking it for one would log the others out,
+    // so while another Google connection is still in use the grant is left in place (it can be removed in the person's Google account).
+    const GOOGLE = ["google", "ga4", "merchant", "searchconsole"];
+    let keptGoogleGrant = false;
+    if (GOOGLE.includes(conn.platform)) {
+      const { count } = await admin.from("connection").select("id", { count: "exact", head: true }).eq("workspace_id", conn.workspace_id).in("platform", GOOGLE).neq("id", conn.id);
+      keptGoogleGrant = (count ?? 0) > 0;
+    }
+    if (!keptGoogleGrant) await revokeAtPlatform(conn.platform, conn.token_enc);
     if (conn.platform === "woocommerce") {
       const { error: eo } = await admin.from("order").delete().eq("workspace_id", conn.workspace_id).like("external_id", "woo:%");
       if (eo) throw new Error(eo.message);
@@ -55,7 +63,7 @@ export async function disconnect(formData: FormData) {
     if (e1) throw new Error(e1.message);
     const { error: e2 } = await admin.from("connection").delete().eq("id", conn.id);
     if (e2) throw new Error(e2.message);
-    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${conn.platform === "woocommerce" ? " You can also deactivate the acezilla plugin in WordPress." : conn.platform === "allegro" ? " You can also remove acezilla under the connected apps in your Allegro account settings." : ""}`)}`;
+    qs = `notice=${encodeURIComponent(`${LABEL[conn.platform]} disconnected. The stored login and imported data were deleted.${keptGoogleGrant ? " Google access was kept for your other Google connections; to remove it fully, use myaccount.google.com/permissions." : ""}${conn.platform === "woocommerce" ? " You can also deactivate the acezilla plugin in WordPress." : conn.platform === "allegro" ? " You can also remove acezilla under the connected apps in your Allegro account settings." : ""}`)}`;
   } catch (e) {
     qs = `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not disconnect")}`;
   }

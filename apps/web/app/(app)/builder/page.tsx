@@ -112,7 +112,7 @@ export default async function Builder({ searchParams }: { searchParams: Promise<
           <div><div className="eyebrow">Worth double-checking</div><ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{out.risks.map((t) => <li key={t}>{t}</li>)}</ul></div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <CopyButton text={draftText(out, platform)} label="Copy whole draft" />
-            {open.status !== "approved" && <form action={approveDraft}><input type="hidden" name="id" value={open.id as string} /><Button variant="outline">Mark as reviewed and approved</Button></form>}
+            {open.status !== "approved" && <form action={approveDraft}><input type="hidden" name="id" value={open.id as string} /><Button variant="outline">Mark as reviewed (does not publish)</Button></form>}
             <form action={deleteDraft}><input type="hidden" name="id" value={open.id as string} /><Button variant="ghost" style={{ color: "var(--neg)" }}>Delete</Button></form>
           </div>
           <p className="sub" style={{ fontSize: 12, margin: 0 }}>Approving only records that a person reviewed it. To run it, copy the texts into {PL[platform]} yourself. Check every claim and fill any [placeholder] before launch.{brief ? ` Brief: ${brief.goal}, ${brief.language}.` : ""}</p>

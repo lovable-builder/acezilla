@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { disconnect } from "../connection-actions";
 import { saveAndSyncSearchConsole } from "./actions";
 
+export const maxDuration = 300; // importing long history runs inside this route's time budget
+
 export default async function SearchConsoleSites({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   const { supabase, current } = await getWorkspaceContext();

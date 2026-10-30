@@ -11,6 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [info, setInfo] = useState(false);
   const [busy, setBusy] = useState(false);
   // Landing-page buttons link here with ?mode=signup
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function Login() {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
+    setInfo(false);
     const supabase = createClient();
     const { data, error } =
       mode === "in"
@@ -31,7 +33,7 @@ export default function Login() {
         : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard` } });
     setBusy(false);
     if (error) return setMsg(error.message);
-    if (!data.session) return setMsg("Check your email to confirm your account, then sign in.");
+    if (!data.session) { setInfo(true); return setMsg("Check your email to confirm your account, then sign in."); }
     router.replace("/dashboard");
     router.refresh();
   }
@@ -44,9 +46,10 @@ export default function Login() {
           <span className="logo-word">acezilla</span>
         </div>
         <h1 className="page" style={{ fontSize: 26 }}>{mode === "in" ? "Welcome back" : "Create your workspace"}</h1>
-        <input className="field" type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="field" type="password" required minLength={8} placeholder="Password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} />
-        {msg && <div className="eyebrow" style={{ color: "var(--neg)" }}>{msg}</div>}
+        <input className="field" type="email" required placeholder="Email" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="field" type="password" required minLength={8} placeholder="Password (8+ characters)" aria-label="Password" autoComplete={mode === "in" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
+        {msg && <div className="eyebrow" role={info ? "status" : "alert"} style={{ color: info ? "var(--pos)" : "var(--neg)" }}>{msg}</div>}
+        {mode === "up" && <div className="sub" style={{ fontSize: 12 }}>By signing up you agree to the <Link href="/terms" className="link">Terms</Link> and the <Link href="/privacy" className="link">Privacy Policy</Link>.</div>}
         <button className="btn" disabled={busy}>{mode === "in" ? "Sign in" : "Sign up"}</button>
         {mode === "in" && <Link href="/forgot-password" className="link">Forgot password?</Link>}
         <button type="button" className="link" onClick={() => setMode(mode === "in" ? "up" : "in")}>

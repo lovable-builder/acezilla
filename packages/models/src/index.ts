@@ -15,3 +15,4 @@ export * from "./traffic";
 export * from "./competitor";
 export * from "./feed";
 export * from "./search";
+export * from "./strategy";

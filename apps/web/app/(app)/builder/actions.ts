@@ -42,7 +42,8 @@ export async function approveDraft(formData: FormData) {
   try {
     const { workspace, user } = await requireWriter();
     if (!/^[0-9a-f-]{36}$/.test(id)) throw new Error("Unknown draft");
-    await createAdminClient().from("campaign_draft").update({ status: "approved", approved_by: user.id, approved_at: new Date().toISOString() }).eq("id", id).eq("workspace_id", workspace.id);
+    const { error } = await createAdminClient().from("campaign_draft").update({ status: "approved", approved_by: user.id, approved_at: new Date().toISOString() }).eq("id", id).eq("workspace_id", workspace.id);
+    if (error) throw new Error(error.message);
   } catch (e) { return back(`error=${encodeURIComponent(e instanceof Error ? e.message : "Could not approve")}`); }
   revalidatePath("/builder");
   back(`draft=${id}`);
@@ -58,7 +59,8 @@ export async function deleteDraft(formData: FormData) {
     const { data: d } = await admin.from("campaign_draft").select("brief").eq("id", id).eq("workspace_id", workspace.id).maybeSingle();
     const paths = ((d?.brief as { assets?: { path: string }[] } | null)?.assets ?? []).map((x) => x.path).filter((p) => p.startsWith(`${workspace.id}/`));
     if (paths.length) await admin.storage.from("creatives").remove(paths);
-    await admin.from("campaign_draft").delete().eq("id", id).eq("workspace_id", workspace.id);
+    const { error: delErr } = await admin.from("campaign_draft").delete().eq("id", id).eq("workspace_id", workspace.id);
+    if (delErr) throw new Error(delErr.message);
   } catch (e) { return back(`error=${encodeURIComponent(e instanceof Error ? e.message : "Could not delete")}`); }
   revalidatePath("/builder");
   back("notice=Draft+deleted");
