@@ -43,7 +43,7 @@ const STEPS = [
 ];
 const FAQ = [
   { q: "Will acezilla change my campaigns on its own?", a: "No. acezilla is suggest-only. It reads your data and prepares suggestions, and it never changes a campaign, budget or ad." },
-  { q: "Which platforms does it work with?", a: "Meta Ads, Google Ads, Allegro Ads, Google Analytics, Google Search Console and Google Merchant Center for data, and WooCommerce or Allegro for store sales." },
+  { q: "Which platforms does it work with?", a: "Meta Ads, Google Ads, Allegro Ads, Google Analytics, Google Search Console and Google Merchant Center for data, and WooCommerce or Allegro for store sales. TikTok Ads and Shopify are planned." },
   { q: "Is my data safe?", a: "Platform logins are stored encrypted and used only on our servers. Each workspace's data is isolated from every other. You can disconnect a platform or ask us to delete your account at any time." },
   { q: "Who is it for?", a: "Online sellers, especially in Poland, who sell on their own shop and on Allegro and want a clear answer on whether their ads pay for themselves." },
   { q: "Can I choose which accounts it reads?", a: "Yes. You pick the accounts when you connect, and you can edit that selection or disconnect a platform at any time." },
@@ -117,7 +117,7 @@ export default function Landing() {
       {/* ---------- definition (a short direct answer for search and AI engines) ---------- */}
       <section className="lp-wrap lp-define">
         <h2>What is acezilla?</h2>
-        <p>acezilla is a marketing workspace that connects your store, Allegro and your ad accounts. It shows what is really working in one place, flags problems early, and prepares suggestions for you to act on yourself.</p>
+        <p>acezilla is a marketing workspace that connects your store, Allegro and your ad accounts. It shows what is really working in one place, flags problems early, and prepares suggestions for you to act on yourself. TikTok Ads and Shopify are planned.</p>
       </section>
 
       {/* ---------- problem / value ---------- */}
@@ -238,7 +238,7 @@ export default function Landing() {
         <div className="lp-wrap">
           <Link href="/" className="lp-brand"><BrandMark size={30} /><span className="logo-word">acezilla</span></Link>
           <nav aria-label="Legal"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/data-deletion">Data deletion</Link>{CONTACT_EMAIL ? <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a> : null}</nav>
-          <p>© 2026 acezilla. Meta, Google, Allegro and WooCommerce are trademarks of their owners and are used only to identify the platforms acezilla connects to.</p>
+          <p>© 2026 acezilla. Meta, Google, TikTok, Shopify, Allegro and WooCommerce are trademarks of their owners and are used only to identify the platforms acezilla connects to.</p>
         </div>
       </footer>
     </div>
