@@ -62,7 +62,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
-          <Step n="1" title="Ad platforms" sub="Where the money goes" done={adsOn.length > 0} detail={adsOn.length ? list(adsOn) : "Not connected"} />
+          <Step n="1" title="Ad platforms" sub="Where the money goes" done={adsOn.length > 0} detail={adsOn.length ? list(adsOn) : adsEmpty.length ? `${list(adsEmpty)} connected, no campaigns yet` : "Not connected"} />
           <Step n="2" title="Store or marketplace" sub="What actually sold" done={storesOn.length > 0} detail={storesOn.length ? list(storesOn) : "Not connected"} />
         </div>
         <div style={{ fontSize: 14, color: verdict.ok ? "var(--pos)" : "var(--ink2)", fontWeight: verdict.ok ? 600 : 400 }}>{verdict.text}{emptyNote ? ` ${emptyNote}` : ""}</div>
