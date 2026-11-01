@@ -35,6 +35,13 @@ test("code exchange returns the refresh token; refusal without one is explicit",
   assert.match(String(rt.calls[0]!.body), /grant_type=refresh_token/);
 });
 
+test("a revoked or expired refresh token is flagged for reconnect with a plain message", async () => {
+  const dead = router(() => err(400, { error: "invalid_grant", error_description: "Token has been expired or revoked." }));
+  await assert.rejects(refreshGoogleAccessToken({ clientId: "c", clientSecret: "s", refreshToken: "RT", fetch: dead.f }), (e: unknown) => e instanceof GoogleApiError && e.needsReauth && /Reconnect/.test(e.message));
+  const other = router(() => err(400, { error: "invalid_client", error_description: "Unauthorized" }));
+  await assert.rejects(refreshGoogleAccessToken({ clientId: "c", clientSecret: "s", refreshToken: "RT", fetch: other.f }), (e: unknown) => e instanceof GoogleApiError && !e.needsReauth);
+});
+
 test("lists leaf accounts directly and through a manager, sending login-customer-id only for children", async () => {
   const { f, calls } = router((c) => {
     if (c.url.endsWith("customers:listAccessibleCustomers")) return ok({ resourceNames: ["customers/4046215939", "customers/1112223333"] });

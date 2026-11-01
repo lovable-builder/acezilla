@@ -71,7 +71,7 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
     return { ok: true, campaigns: r.campaigns, rows: r.insights };
   } catch (e) {
     const error = e instanceof Error ? e.message : "Sync failed";
-    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof TiktokApiError && e.needsReauth) || (e instanceof GoogleApiError && /invalid_grant/i.test(error)) || (e instanceof Ga4ApiError && e.status === 401) || (e instanceof MerchantApiError && e.status === 401 && !/not registered/i.test(error)) || (e instanceof SearchConsoleApiError && e.status === 401) || (e instanceof AllegroApiError && e.needsReauth);
+    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof TiktokApiError && e.needsReauth) || (e instanceof GoogleApiError && e.needsReauth) || (e instanceof Ga4ApiError && e.status === 401) || (e instanceof MerchantApiError && e.status === 401 && !/not registered/i.test(error)) || (e instanceof SearchConsoleApiError && e.status === 401) || (e instanceof AllegroApiError && e.needsReauth);
     await admin.from("connection").update({ status: needsReauth ? "needs_reauth" : "error", last_error: error.slice(0, 300) }).eq("id", conn.id);
     return { ok: false, error, needsReauth };
   }

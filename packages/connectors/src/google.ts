@@ -4,7 +4,9 @@ export const GOOGLE_ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 const DEFAULT_VERSION = "v24";
 
 export class GoogleApiError extends Error {
-  constructor(message: string, readonly status?: number, readonly retryable = false) { super(message); }
+  constructor(message: string, readonly status?: number, readonly retryable = false, readonly errorCode?: string) { super(message); }
+  /** Google refused the stored login (expired, revoked, password changed): the person has to connect again. */
+  get needsReauth() { return this.errorCode === "invalid_grant"; }
 }
 
 export interface GoogleOptions { accessToken: string; version?: string; fetch?: typeof fetch; maxRetries?: number }
@@ -34,7 +36,7 @@ export function googleScopesAuthUrl(p: { clientId: string; redirectUri: string; 
 async function tokenCall(body: Record<string, string>, f: typeof fetch) {
   const res = await f("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
   const json: any = await res.json().catch(() => ({}));
-  if (!res.ok || json.error) throw new GoogleApiError(json.error_description ?? json.error ?? `Google token HTTP ${res.status}`, res.status);
+  if (!res.ok || json.error) throw new GoogleApiError(json.error_description ?? json.error ?? `Google token HTTP ${res.status}`, res.status, false, typeof json.error === "string" ? json.error : undefined);
   return json;
 }
 
@@ -45,8 +47,14 @@ export async function exchangeGoogleCode(p: { clientId: string; clientSecret: st
 }
 
 export async function refreshGoogleAccessToken(p: { clientId: string; clientSecret: string; refreshToken: string; fetch?: typeof fetch }) {
-  const j = await tokenCall({ client_id: p.clientId, client_secret: p.clientSecret, refresh_token: p.refreshToken, grant_type: "refresh_token" }, p.fetch ?? fetch);
-  return String(j.access_token);
+  try {
+    const j = await tokenCall({ client_id: p.clientId, client_secret: p.clientSecret, refresh_token: p.refreshToken, grant_type: "refresh_token" }, p.fetch ?? fetch);
+    return String(j.access_token);
+  } catch (e) {
+    // Google's own wording ("Token has been expired or revoked.") does not say what to do.
+    if (e instanceof GoogleApiError && e.needsReauth) throw new GoogleApiError("Your Google login expired or was revoked. Reconnect to keep syncing.", e.status, false, "invalid_grant");
+    throw e;
+  }
 }
 
 // ---- REST helpers ----
