@@ -13,3 +13,4 @@ export * from "./image-url";
 export * from "./ga4";
 export * from "./merchant";
 export * from "./searchconsole";
+export * from "./tiktok";

@@ -1,12 +1,13 @@
 import "server-only";
 import {
-  fetchGoogleDataset, fetchMetaDataset, GoogleApiError, listGoogleAdAccounts, listMetaAdAccounts, MetaApiError,
+  fetchGoogleDataset, fetchMetaDataset, fetchTiktokDataset, GoogleApiError, listGoogleAdAccounts, listMetaAdAccounts, listTiktokAdvertisers, MetaApiError, TiktokApiError, revokeTiktokToken,
   refreshGoogleAccessToken, AllegroApiError, Ga4ApiError, MerchantApiError, SearchConsoleApiError,
 } from "@acezilla/connectors";
 import { decryptToken } from "@/lib/crypto";
 import { alertIfNeeded } from "@/lib/alerts";
 import { ingestDataset } from "@/lib/ingest";
 import { syncAllegro } from "@/lib/allegro";
+import { tiktokOptions } from "@/lib/tiktok";
 import { ga4AccessToken, pullGa4 } from "@/lib/ga4";
 import { merchantAccessToken, pullMerchant } from "@/lib/merchant";
 import { pullSearchConsole, searchConsoleAccessToken } from "@/lib/searchconsole";
@@ -19,7 +20,7 @@ export type SyncResult = { ok: true; campaigns: number; rows: number } | { ok: f
 /** Re-pulled on every sync: attribution windows mean recent days keep changing for up to ~4 weeks. */
 export const SYNC_DAYS = 35;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
-const PREFIX: Record<string, string> = { meta: "meta-acct-", google: "google-acct-" };
+const PREFIX: Record<string, string> = { meta: "meta-acct-", google: "google-acct-", tiktok: "tiktok-acct-" };
 
 /** Pulls recent data for the accounts the user selected on this connection, and records success or failure. */
 export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DAYS): Promise<SyncResult> {
@@ -53,6 +54,10 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
       const o = { accessToken: decryptToken(conn.token_enc), version: process.env.META_GRAPH_VERSION };
       const accounts = (await listMetaAdAccounts(o)).filter((a) => selected.includes(a.id));
       ds = await fetchMetaDataset(o, accounts, since, until);
+    } else if (conn.platform === "tiktok") {
+      const o = tiktokOptions(decryptToken(conn.token_enc));
+      const accounts = (await listTiktokAdvertisers(o)).filter((a) => selected.includes(a.id));
+      ds = await fetchTiktokDataset(o, accounts, since, until);
     } else {
       const accessToken = await refreshGoogleAccessToken({
         clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET!, refreshToken: decryptToken(conn.token_enc),
@@ -61,12 +66,12 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
       const accounts = (await listGoogleAdAccounts(o)).filter((a) => selected.includes(a.id));
       ds = await fetchGoogleDataset(o, accounts, since, until);
     }
-    const r = await ingestDataset(admin, conn.workspace_id, conn.platform as "meta" | "google", ds);
+    const r = await ingestDataset(admin, conn.workspace_id, conn.platform as "meta" | "google" | "tiktok", ds);
     await admin.from("connection").update({ status: "active", last_error: null }).eq("id", conn.id);
     return { ok: true, campaigns: r.campaigns, rows: r.insights };
   } catch (e) {
     const error = e instanceof Error ? e.message : "Sync failed";
-    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof GoogleApiError && /invalid_grant/i.test(error)) || (e instanceof Ga4ApiError && e.status === 401) || (e instanceof MerchantApiError && e.status === 401 && !/not registered/i.test(error)) || (e instanceof SearchConsoleApiError && e.status === 401) || (e instanceof AllegroApiError && e.needsReauth);
+    const needsReauth = (e instanceof MetaApiError && (e.code === 190 || e.code === 102)) || (e instanceof TiktokApiError && e.needsReauth) || (e instanceof GoogleApiError && /invalid_grant/i.test(error)) || (e instanceof Ga4ApiError && e.status === 401) || (e instanceof MerchantApiError && e.status === 401 && !/not registered/i.test(error)) || (e instanceof SearchConsoleApiError && e.status === 401) || (e instanceof AllegroApiError && e.needsReauth);
     await admin.from("connection").update({ status: needsReauth ? "needs_reauth" : "error", last_error: error.slice(0, 300) }).eq("id", conn.id);
     return { ok: false, error, needsReauth };
   }
@@ -75,7 +80,7 @@ export async function syncConnection(admin: Admin, conn: ConnRow, days = SYNC_DA
 /** Every live Meta/Google connection, one after another, within a time budget. */
 export async function syncAll(admin: Admin, budgetMs = 240_000) {
   const started = Date.now();
-  const { data } = await admin.from("connection").select("id,workspace_id,platform,token_enc,status").in("platform", ["meta", "google", "allegro", "ga4", "merchant", "searchconsole"]).neq("status", "needs_reauth");
+  const { data } = await admin.from("connection").select("id,workspace_id,platform,token_enc,status").in("platform", ["meta", "google", "tiktok", "allegro", "ga4", "merchant", "searchconsole"]).neq("status", "needs_reauth");
   const results: { platform: string; ok: boolean; rows?: number; error?: string }[] = [];
   let skipped = 0;
   for (const c of data ?? []) {
@@ -93,6 +98,7 @@ export async function revokeAtPlatform(platform: string, tokenEnc: string | null
   try {
     const token = decryptToken(tokenEnc);
     if (platform === "meta") await fetch(`https://graph.facebook.com/${process.env.META_GRAPH_VERSION ?? "v23.0"}/me/permissions`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (platform === "tiktok") { const { appId, appSecret } = tiktokOptions(token); if (appId && appSecret) await revokeTiktokToken({ appId, appSecret, accessToken: token }); }
     if (platform === "google" || platform === "ga4" || platform === "merchant" || platform === "searchconsole") await fetch("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token }) });
   } catch { /* ignore */ }
 }

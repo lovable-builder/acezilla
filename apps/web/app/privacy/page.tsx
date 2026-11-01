@@ -32,7 +32,7 @@ export default function Privacy() {
         <li><b>Google Ads:</b> the Google Ads API scope, which Google defines as one scope covering reading and changing. We only read reports.</li>
         <li><b>Google Analytics:</b> read-only (<code>analytics.readonly</code>). <b>Search Console:</b> read-only (<code>webmasters.readonly</code>).</li>
         <li><b>Google Merchant Center:</b> <code>auth/content</code>, the only scope Google offers for it, which also covers managing products. We only read product lists, statuses and reports. The one other call is a one-time setup request, started by a button you press, that registers acezilla's developer contact with your Merchant Center account.</li>
-        <li><b>Allegro:</b> the scopes shown on Allegro's own consent screen. <b>TikTok:</b> ad account and reporting access, once TikTok approves our application.</li>
+        <li><b>Allegro:</b> the scopes shown on Allegro's own consent screen. <b>TikTok:</b> read-only access to the ad accounts you tick on TikTok's consent screen: account details, campaigns and ad reporting.</li>
       </ul>
 
       <h2>How we use it</h2>

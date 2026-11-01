@@ -7,6 +7,7 @@ import { BrandLogo } from "@/components/brand/logo";
 import { ago } from "@/lib/format";
 import { syncNow } from "./connection-actions";
 import { allegroEnv } from "@/lib/allegro";
+import { tiktokEnv } from "@/lib/tiktok";
 
 const CONNECTED_BG = "color-mix(in oklab, var(--pos) 7%, var(--surface))";
 
@@ -26,6 +27,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const conn = (p: string) => conns?.find((c) => c.platform === p);
   const names = (p: string) => (accts ?? []).filter((a) => a.platform === p).map((a) => a.name as string);
   const metaReady = !!(process.env.META_APP_ID && process.env.META_CONFIG_ID && process.env.META_APP_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const tiktokReady = tiktokEnv().ready;
   const woo = conn("woocommerce");
   const allegro = conn("allegro");
   const ga4 = conn("ga4");
@@ -33,7 +35,7 @@ export default async function Connections({ searchParams }: { searchParams: Prom
   const searchc = conn("searchconsole");
   // How many accounts were picked on each connection that needs a pick. Zero means connected but empty.
   const chosen: Record<string, number> = {
-    meta: names("meta").length, google: names("google").length, ga4: (props ?? []).length, merchant: (mAccts ?? []).length, searchconsole: (sSites ?? []).length,
+    meta: names("meta").length, google: names("google").length, tiktok: names("tiktok").length, ga4: (props ?? []).length, merchant: (mAccts ?? []).length, searchconsole: (sSites ?? []).length,
   };
   // An ad account can be connected and synced yet hold no campaigns. That is not a problem with the connection, but it is not "real ROAS" either.
   const campaignCount = (p: string) => (camps ?? []).filter((c) => c.platform === p).length;
@@ -111,20 +113,20 @@ export default async function Connections({ searchParams }: { searchParams: Prom
             </Card>
           )}
           <StepFlow id="connect">
-          <FlowStep label="Ad platforms" hint="Meta and Google, where the money goes" badge={adsEmpty.length ? "no campaigns" : undefined}>
+          <FlowStep label="Ad platforms" hint="Meta, TikTok and Google, where the money goes" badge={adsEmpty.length ? "no campaigns" : undefined}>
           <Section n="1" title="Ad platforms" feeds="Feeds: spend, clicks, conversions and the ROAS each platform reports.">
-            {(["meta", "google"] as const).map((id) => {
+            {(["meta", "tiktok", "google"] as const).map((id) => {
               const c = conn(id);
-              const ready = id === "meta" ? metaReady : googleReady;
-              const label = id === "meta" ? "Meta" : "Google";
+              const ready = id === "meta" ? metaReady : id === "tiktok" ? tiktokReady : googleReady;
+              const label = id === "meta" ? "Meta" : id === "tiktok" ? "TikTok" : "Google";
               const daysLeft = c?.token_expires_at ? Math.floor((new Date(c.token_expires_at as string).getTime() - Date.now()) / 86400000) : null;
               const broken = c && (c.status === "error" || c.status === "needs_reauth");
               return (
                 <Connector
                   key={id}
                   logo={<BrandLogo brand={id} />}
-                  name={id === "meta" ? "Meta Ads" : "Google Ads"}
-                  desc={id === "meta" ? "Facebook and Instagram campaigns" : "Search, Shopping and Performance Max"}
+                  name={id === "meta" ? "Meta Ads" : id === "tiktok" ? "TikTok Ads" : "Google Ads"}
+                  desc={id === "meta" ? "Facebook and Instagram campaigns" : id === "tiktok" ? "Campaigns, spend and purchases from TikTok ads" : "Search, Shopping and Performance Max"}
                   connected={!!c} lastSync={c?.last_sync_at as string | undefined} accounts={names(id)} accountWord="ad account"
                   problem={broken ? (c.status === "needs_reauth" ? "Login expired. Reconnect to keep syncing." : `Sync failed: ${c.last_error ?? "unknown error"}`) : undefined}
                   warning={!broken && daysLeft !== null && daysLeft <= 10 ? `Login expires in ${Math.max(daysLeft, 0)} day${daysLeft === 1 ? "" : "s"}. Reconnect to renew.` : c && !broken && (chosen[id] ?? 0) > 0 && campaignCount(id) === 0 ? "Connected and read, but this account has no campaigns yet, so there is no ad spend to compare." : undefined}
@@ -142,10 +144,6 @@ export default async function Connections({ searchParams }: { searchParams: Prom
                 />
               );
             })}
-            <Connector
-              logo={<BrandLogo brand="tiktok" />} name="TikTok Ads" desc="Campaigns, spend and creative metrics"
-              connected={false} action={<Button variant="outline" disabled title="Waiting for TikTok to approve our app">Pending approval</Button>}
-            />
           </Section>
           </FlowStep>
           <FlowStep label="Stores" hint="Your shop and Allegro, where the sales happen">
