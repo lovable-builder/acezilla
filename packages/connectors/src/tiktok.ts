@@ -20,7 +20,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Every call answers {code, message, data}; code 0 is success. The token goes in the Access-Token header (no "Bearer"), never the URL. */
 async function call<T = any>(o: TiktokOptions, method: "GET" | "POST", path: string, params: Record<string, string | number> = {}, body?: unknown): Promise<T> {
   const f = o.fetch ?? fetch;
-  const url = `${BASE}/${path}${method === "GET" ? `?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}` : ""}`;
+  const url = `${BASE}/${path}${method === "GET" ? `?${new URLSearchParams(Object.entries(params).map(([k, v]): [string, string] => [k, String(v)]))}` : ""}`;
   for (let attempt = 0; ; attempt++) {
     const headers: Record<string, string> = { "Access-Token": o.accessToken };
     if (body !== undefined) headers["Content-Type"] = "application/json";
